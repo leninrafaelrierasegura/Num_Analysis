@@ -1,0 +1,39 @@
+"0","# Function to build a tadpole graph and create a mesh"
+"0","gets_graph_tadpole <- function(h){"
+"0","  edge1 <- rbind(c(0,0),c(1,0))"
+"0","  theta <- seq(from=-pi,to=pi,length.out = 100)"
+"0","  edge2 <- cbind(1+1/pi+cos(theta)/pi,sin(theta)/pi)"
+"0","  edges = list(edge1, edge2)"
+"0","  graph <- metric_graph$new(edges = edges)"
+"0","  graph$build_mesh(h = h)"
+"0","  return(graph)"
+"0","}"
+"0","h <- 0.05"
+"0","graph <- gets_graph_tadpole(h = h)"
+"2","Starting graph creation...
+"
+"2","LongLat is set to FALSE
+"
+"2","Creating edges...
+"
+"2","Setting edge weights...
+"
+"2","Computing bounding box...
+"
+"2","Setting up edges
+"
+"2","Merging close vertices
+"
+"2","Total construction time: 0.19 secs
+"
+"2","Creating and updating vertices...
+"
+"2","Storing the initial graph...
+"
+"2","Computing the relative positions of the edges...
+"
+"0","# Plot the tadpole graph"
+"0","graph$plot() +"
+"0","  ggtitle(""Tadpole graph"") + "
+"0","  theme_minimal() + "
+"0","  theme(text = element_text(family = ""Palatino""))"

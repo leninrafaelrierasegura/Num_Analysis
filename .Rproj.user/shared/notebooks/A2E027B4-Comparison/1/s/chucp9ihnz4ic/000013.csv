@@ -1,0 +1,8 @@
+"0","htmltools::tagList("
+"0","  xaringanExtra::use_clipboard("
+"0","    button_text = ""<i class=\""fa-solid fa-clipboard\"" style=\""color: #00008B\""></i>"","
+"0","    success_text = ""<i class=\""fa fa-check\"" style=\""color: #90BE6D\""></i>"","
+"0","    error_text = ""<i class=\""fa fa-times-circle\"" style=\""color: #F94144\""></i>"""
+"0","  ),"
+"0","  rmarkdown::html_dependency_font_awesome()"
+"0",")"

@@ -1,0 +1,8 @@
+"0","kappa <- 1"
+"0","alpha <- 4"
+"0","beta <- alpha/2"
+"0","L <- kappa^2*C + G"
+"0","op <- fractional.operators(L, beta, C, scale.factor = kappa^2, m = 1)"
+"0","Pl <- op$Pl"
+"0","Pr <- op$Pr"
+"0","Ci <- op$Ci"
