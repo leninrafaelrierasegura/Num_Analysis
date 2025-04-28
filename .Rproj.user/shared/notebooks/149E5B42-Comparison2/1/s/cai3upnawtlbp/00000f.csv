@@ -1,0 +1,43 @@
+"0","h <- 0.01"
+"0","graph <- gets_graph_tadpole(h = h)"
+"2","Starting graph creation...
+"
+"2","LongLat is set to FALSE
+"
+"2","Creating edges...
+"
+"2","Setting edge weights...
+"
+"2","Computing bounding box...
+"
+"2","Setting up edges
+"
+"2","Merging close vertices
+"
+"2","Total construction time: 0.23 secs
+"
+"2","Creating and updating vertices...
+"
+"2","Storing the initial graph...
+"
+"2","Computing the relative positions of the edges...
+"
+"0","T_final <- 1"
+"0","time_step <- 0.01"
+"0","time_seq <- seq(0, T_final, by = time_step)"
+"0","# Compute the FEM matrices"
+"0","graph$compute_fem()"
+"0","G <- graph$mesh$G"
+"0","C <- graph$mesh$C"
+"0","I <- Matrix::Diagonal(nrow(C))"
+"0","x <- graph$mesh$V[, 1]"
+"0","y <- graph$mesh$V[, 2]"
+"0","edge_number <- graph$mesh$VtE[, 1]"
+"0","pos <- sum(edge_number == 1)+1"
+"0","order_to_plot <- function(v)return(c(v[1], v[3:pos], v[2], v[(pos+1):length(v)], v[2]))"
+"0","weights <- graph$mesh$weights"
+"0","# Initial condition"
+"0","U_0 <- 10*exp(-((x-1)^2 + (y)^2))"
+"0",""
+"0","U_true <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))"
+"0","U_true[, 1] <- U_0"

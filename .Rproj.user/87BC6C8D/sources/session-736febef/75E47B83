@@ -3,7 +3,7 @@
     "path": "~/Desktop/Num_Analysis/Comparison2.Rmd",
     "project_path": "Comparison2.Rmd",
     "type": "r_markdown",
-    "hash": "113683883",
+    "hash": "1793333704",
     "contents": "",
     "dirty": false,
     "created": 1745831437820.0,
@@ -12,15 +12,15 @@
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "217,8",
-        "scrollLine": "203"
+        "cursorPosition": "243,10",
+        "scrollLine": "239"
     },
     "folds": "",
-    "lastKnownWriteTime": 1745832222,
+    "lastKnownWriteTime": 1745838356,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1745832222227,
+    "last_content_update": 1745838356706,
     "read_only": false,
     "read_only_alternatives": []
 }

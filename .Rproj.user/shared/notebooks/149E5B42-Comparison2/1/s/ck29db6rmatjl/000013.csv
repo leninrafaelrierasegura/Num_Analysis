@@ -1,6 +1,58 @@
-"0","inla.upgrade(testing = TRUE)
+"0","# install.packages(""INLA"",repos=c(getOption(""repos""),INLA=""https://inla.r-inla-download.org/R/testing""), dep=TRUE)"
+"0","# inla.upgrade(testing = TRUE)"
+"0","# remotes::install_github(""inlabru-org/inlabru"", ref = ""devel"")"
+"0","# remotes::install_github(""davidbolin/rspde"", ref = ""devel"")"
+"0","# remotes::install_github(""davidbolin/metricgraph"", ref = ""devel"")"
+"0","library(INLA)"
+"0","library(inlabru)"
+"2","Loading required package: fmesher
 "
-"1","
- *** You already have the latest version.
+"0","library(rSPDE)"
+"2","This is rSPDE 2.5.1
+- See https://davidbolin.github.io/rSPDE for vignettes and manuals.
+"
+"0","library(MetricGraph)"
+"2","This is MetricGraph 1.4.1
+- See https://davidbolin.github.io/MetricGraph for vignettes and manuals.
+"
+"2","
+Attaching package: ‘MetricGraph’
+
+"
+"2","The following object is masked from ‘package:stats’:
+
+    filter
+
+"
+"0","library(grateful)"
+"0",""
+"0","library(plotly)"
+"2","Loading required package: ggplot2
+"
+"2","Registered S3 method overwritten by 'data.table':
+  method           from
+  print.data.table     
+"
+"2","Registered S3 method overwritten by 'htmlwidgets':
+  method           from         
+  print.htmlwidget tools:rstudio
+"
+"2","
+Attaching package: ‘plotly’
+
+"
+"2","The following object is masked from ‘package:ggplot2’:
+
+    last_plot
+
+"
+"2","The following object is masked from ‘package:stats’:
+
+    filter
+
+"
+"2","The following object is masked from ‘package:graphics’:
+
+    layout
 
 "
