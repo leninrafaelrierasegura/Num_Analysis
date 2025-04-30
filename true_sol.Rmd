@@ -84,9 +84,9 @@ set.seed(1982)
 # Set global options for all code chunks
 knitr::opts_chunk$set(
   # Disable messages printed by R code chunks
-  message = FALSE,    
+  message = TRUE,    
   # Disable warnings printed by R code chunks
-  warning = FALSE,    
+  warning = TRUE,    
   # Show R code within code chunks in output
   echo = TRUE,        
   # Include both R code and its results in output
@@ -145,7 +145,7 @@ If $f=0$, then the solution is given by
 # Function to build a tadpole graph and create a mesh
 gets_graph_tadpole <- function(h){
   edge1 <- rbind(c(0,0),c(1,0))
-  theta <- seq(from=-pi,to=pi,length.out = 100)
+  theta <- seq(from=-pi,to=pi,length.out = 10000)
   edge2 <- cbind(1+1/pi+cos(theta)/pi,sin(theta)/pi)
   edges = list(edge1, edge2)
   graph <- metric_graph$new(edges = edges)
@@ -203,10 +203,10 @@ return(f)
 Implementation of $u$
 
 ```{r}
-time_step <- 1
-T_final <- time_step*20
+time_step <- 0.01
+T_final <- 2
 time_seq <- seq(0, T_final, by = time_step)
-h <- 0.001#time_step/100
+h <- 0.01
 graph <- gets_graph_tadpole(h = h)
 # Compute the FEM matrices
 graph$compute_fem()
@@ -216,31 +216,42 @@ edge_number <- graph$mesh$VtE[, 1]
 pos <- sum(edge_number == 1)+1
 order_to_plot <- function(v)return(c(v[1], v[3:pos], v[2], v[(pos+1):length(v)], v[2]))
 weights <- graph$mesh$weights
-# Initial condition
-U_0 <- 10*exp(-((x-1)^2 + (y)^2))
 ```
-
-
-Highlights
-
-- When $\alpha$ is large, we need less terms in the series to approximate the solution.
-
-- When $\alpha$ is small, $h<\tau$ is preferable.
-
-- When $\alpha$ is large, $h<\tau$ is preferable.
-
-
 
 
 ```{r}
 kappa <- 1
-alpha <- 0.4
-n_finite <- c(10,100)
+alpha <- 0.51
 
+
+n_finite <- 10
+EIGENVAL <- c()       # initialize empty vector for eigenvalues
+EIGENFUN <- NULL       # initialize NULL for eigenfunctions matrix
+INDEX <- c()
+
+for (j in 0:n_finite) {
+    lambda_j <- kappa^2 + (j*pi/2)^2
+    e_j <- tadpole.eig(j,graph)$phi#/sqrt(1000)
+    EIGENVAL <- c(EIGENVAL, lambda_j)         # append scalar to vector
+    EIGENFUN <- cbind(EIGENFUN, e_j)            # append column to matrix
+    INDEX <- c(INDEX, j)
+    if (j>0 && (j %% 2 == 0)) {
+      lambda_j <- kappa^2 + (j*pi/2)^2
+      e_j <- tadpole.eig(j,graph)$psi#/sqrt(1000)
+      EIGENVAL <- c(EIGENVAL, lambda_j)         # append scalar to vector
+      EIGENFUN <- cbind(EIGENFUN, e_j)            # append column to matrix
+      INDEX <- c(INDEX, j+0.1)
+    }
+}
+
+coeff <- sample(1:5, length(INDEX), replace = TRUE)
+U_0 <- EIGENFUN %*% coeff
+#U_0 <- 10*exp(-((x-1)^2 + (y)^2))
+n_finite <- c(10,1000)
 n_finite1 <- n_finite[1]
 U_true1 <- matrix(NA, nrow = length(x), ncol = length(time_seq))
 U_true1[, 1] <- U_0
-for (k in 1:(length(time_seq) - 1)) {
+for (k in 1:(length(time_seq)-1)) {
   aux_k <- rep(0, length(x))
   for (j in 0:n_finite1) {
     decay_j <- exp(-time_seq[k+1]*(kappa^2 + (j*pi/2)^2)^(alpha/2))
@@ -251,13 +262,13 @@ for (k in 1:(length(time_seq) - 1)) {
       aux_k <- aux_k + decay_j*sum(U_0*e_j*weights)*e_j
     }
   }
-  U_true1[, k + 1] <- aux_k
+  U_true1[, k+1] <- aux_k
 }
 
 n_finite2 <- n_finite[2]
 U_true2 <- matrix(NA, nrow = length(x), ncol = length(time_seq))
 U_true2[, 1] <- U_0
-for (k in 1:(length(time_seq) - 1)) {
+for (k in 1:(length(time_seq)-1)) {
   aux_k <- rep(0, length(x))
   for (j in 0:n_finite2) {
     decay_j <- exp(-time_seq[k+1]*(kappa^2 + (j*pi/2)^2)^(alpha/2))
@@ -268,7 +279,7 @@ for (k in 1:(length(time_seq) - 1)) {
       aux_k <- aux_k + decay_j*sum(U_0*e_j*weights)*e_j
     }
   }
-  U_true2[, k + 1] <- aux_k
+  U_true2[, k+1] <- aux_k
 }
 ```
 
@@ -277,7 +288,7 @@ for (k in 1:(length(time_seq) - 1)) {
 ```{r}
 x <- order_to_plot(x)
 y <- order_to_plot(y)
-max_error_at_each_time <- apply(abs(U_true1 - U_true2), 2, max)
+max_error_at_each_time <- apply(abs(U_true1 - U_true2)/abs(U_true1), 2, max)
 
 U_true1 <- apply(U_true1, 2, order_to_plot)
 U_true2 <- apply(U_true2, 2, order_to_plot)
@@ -297,8 +308,8 @@ fig <- fig %>% layout(title = "Max Error at Each Time Step",
 plot_data <- data.frame(
   x = rep(x, times = ncol(U_true1)),
   y = rep(y, times = ncol(U_true1)),
-  z_true = as.vector(U_true1),
-  z_approx = as.vector(U_true2),
+  z_true1 = as.vector(U_true1),
+  z_true2 = as.vector(U_true2),
   frame = rep(time_seq, each = length(x))
 )
 
@@ -310,15 +321,15 @@ z_range <- range(c(U_true1, U_true2))
 # Initial plot setup (first frame only)
 p <- plot_ly(plot_data, frame = ~frame) %>%
   add_trace(
-    x = ~x, y = ~y, z = ~z_true,
+    x = ~x, y = ~y, z = ~z_true1,
     type = "scatter3d", mode = "lines",
-    name = "True",
+    name = paste0("n_finite = ", n_finite1),
     line = list(color = "blue", width = 2)
   ) %>%
   add_trace(
-    x = ~x, y = ~y, z = ~z_approx,
+    x = ~x, y = ~y, z = ~z_true2,
     type = "scatter3d", mode = "lines",
-    name = "Approximation",
+    name = paste0("n_finite = ", n_finite2),
     line = list(color = "red", width = 2)
   ) %>%
   layout(
