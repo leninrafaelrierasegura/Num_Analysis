@@ -220,7 +220,7 @@ weights <- graph$mesh$weights
 
 ```{r}
 kappa <- 1
-n_finite <- 1000
+n_finite <- 100
 
 EIGENVAL <- c()       # initialize empty vector for eigenvalues
 EIGENFUN <- NULL       # initialize NULL for eigenfunctions matrix

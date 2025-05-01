@@ -1,0 +1,411 @@
+---
+title: "Solving a parabolic equation"
+date: "Created: 20-04-2025. Last modified: `r format(Sys.time(), '%d-%m-%Y.')`"
+output:
+  html_document:
+    mathjax: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    highlight: pygments
+    theme: flatly
+    code_folding: show # class.source = "fold-hide" to hide code and add a button to show it
+    df_print: paged
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: false
+    fig_caption: true
+    code_download: true
+always_allow_html: true
+bibliography: 
+  - references.bib
+  - grateful-refs.bib
+header-includes:
+  - \newcommand{\ar}{\mathbb{R}}
+  - \newcommand{\llav}[1]{\left\{#1\right\}}
+  - \newcommand{\pare}[1]{\left(#1\right)}
+  - \newcommand{\Ncal}{\mathcal{N}}
+  - \newcommand{\Vcal}{\mathcal{V}}
+  - \newcommand{\Ecal}{\mathcal{E}}
+  - \newcommand{\Wcal}{\mathcal{W}}
+---
+
+```{r xaringanExtra-clipboard, echo = FALSE}
+htmltools::tagList(
+  xaringanExtra::use_clipboard(
+    button_text = "<i class=\"fa-solid fa-clipboard\" style=\"color: #00008B\"></i>",
+    success_text = "<i class=\"fa fa-check\" style=\"color: #90BE6D\"></i>",
+    error_text = "<i class=\"fa fa-times-circle\" style=\"color: #F94144\"></i>"
+  ),
+  rmarkdown::html_dependency_font_awesome()
+)
+```
+
+
+```{css, echo = FALSE}
+body .main-container {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+body {
+  max-width: 100% !important;
+}
+
+body, td {
+   font-size: 16px;
+}
+code.r{
+  font-size: 14px;
+}
+pre {
+  font-size: 14px
+}
+.custom-box {
+  background-color: #f5f7fa; /* Light grey-blue background */
+  border-color: #e1e8ed; /* Light border color */
+  color: #2c3e50; /* Dark text color */
+  padding: 15px; /* Padding inside the box */
+  border-radius: 5px; /* Rounded corners */
+  margin-bottom: 20px; /* Spacing below the box */
+}
+.caption {
+  margin: auto;
+  text-align: center;
+  margin-bottom: 20px; /* Spacing below the box */
+}
+```
+
+
+Let us set some global options for all code chunks in this document.
+
+
+```{r}
+# Set seed for reproducibility
+set.seed(1982) 
+# Set global options for all code chunks
+knitr::opts_chunk$set(
+  # Disable messages printed by R code chunks
+  message = TRUE,    
+  # Disable warnings printed by R code chunks
+  warning = TRUE,    
+  # Show R code within code chunks in output
+  echo = TRUE,        
+  # Include both R code and its results in output
+  include = TRUE,     
+  # Evaluate R code chunks
+  eval = TRUE,       
+  # Enable caching of R code chunks for faster rendering
+  cache = FALSE,      
+  # Align figures in the center of the output
+  fig.align = "center",
+  # Enable retina display for high-resolution figures
+  retina = 2,
+  # Show errors in the output instead of stopping rendering
+  error = TRUE,
+  # Do not collapse code and output into a single block
+  collapse = FALSE
+)
+```
+
+
+
+
+```{r}
+# inla.upgrade(testing = TRUE)
+# remotes::install_github("inlabru-org/inlabru", ref = "devel")
+# remotes::install_github("davidbolin/rspde", ref = "devel")
+# remotes::install_github("davidbolin/metricgraph", ref = "devel")
+library(INLA)
+library(inlabru)
+library(rSPDE)
+library(MetricGraph)
+library(grateful)
+
+library(plotly)
+```
+
+
+We want to solve the fractional diffusion equation
+\begin{equation}
+\label{eq:maineq}
+    \partial_t u+(\kappa^2-\Delta_\Gamma)^{\frac{\alpha}{2}} u=f \text { on } \Gamma \times(0, T), \quad u(0)=u_0 \text { on } \Gamma,
+\end{equation}
+where $u$ satisfies the Kirchhoff vertex conditions
+\begin{equation}
+\label{eq:Kcond}
+    \left\{\phi\in C(\Gamma)\;\Big|\; \forall v\in V: \sum_{e\in\mathcal{E}_v}\partial_e \phi(v)=0 \right\}
+\end{equation}
+
+If $f=0$, then the solution is given by
+\begin{equation}
+\label{eq:sol_reprentation}
+        u(s,t) = \displaystyle\sum_{j\in\mathbb{N}}e^{-\lambda^{\frac{\alpha}{2}}_jt}\left(u_0, e_j\right)_{L_2(\Gamma)}e_j(s).
+\end{equation}
+
+```{r}
+# Function to build a tadpole graph and create a mesh
+gets_graph_tadpole <- function(h){
+  edge1 <- rbind(c(0,0),c(1,0))
+  theta <- seq(from=-pi,to=pi,length.out = 10000)
+  edge2 <- cbind(1+1/pi+cos(theta)/pi,sin(theta)/pi)
+  edges = list(edge1, edge2)
+  graph <- metric_graph$new(edges = edges)
+  graph$build_mesh(h = h)
+  return(graph)
+}
+```
+
+Let $\Gamma_T = (\Vcal,\Ecal)$ characterize the tadpole graph with $\Vcal = \{v_1,v_2\}$ and $\Ecal = \{e_1,e_2\}$ as specified in Figure \ref{Interval.Circle.Tadpole}c. The left edge $e_1$ has length 1 and the circular edge $e_2$ has length 2. As discussed in Subsection \ref{subsec:prelim}, a point on $e_1$ is parameterized via $s=\left(e_1, t\right)$ for $t \in[0,1]$ and a point on $e_2$ via $s=\left(e_2, t\right)$ for $t\in[0,2]$. One can verify that $-\Delta_\Gamma$ has eigenvalues $0,\left\{(i \pi / 2)^2\right\}_{i \in \mathbb{N}}$ and $\left\{(i \pi / 2)^2\right\}_{2 i \in \mathbb{N}}$ with corresponding eigenfunctions $\phi_0$, $\left\{\phi_i\right\}_{i \in \mathbb{N}}$, and $\left\{\psi_i\right\}_{2 i \in \mathbb{N}}$ given by $\phi_0(s)=1 / \sqrt{3}$ and 
+\begin{equation*}
+    \phi_i(s)=C_{\phi, i}\begin{cases}
+        -2 \sin (\frac{i\pi}{2}) \cos (\frac{i \pi t}{2}), & s \in e_1, \\
+\sin (i \pi t / 2), & s \in e_2,
+    \end{cases},
+\quad 
+    \psi_i(s)=\frac{\sqrt{3}}{\sqrt{2}} \begin{cases}
+    (-1)^{i / 2} \cos (\frac{i \pi t}{2}), & s \in e_1, \\
+\cos (\frac{i \pi t}{2}), & s \in e_2,
+\end{cases},
+\end{equation*}
+where $C_{\phi, i}=1$ if $i$ is even and $C_{\phi, i}=1 / \sqrt{3}$ otherwise. Moreover, these functions form an orthonormal basis for $L_2(\Gamma_T)$.
+
+```{r}
+# Function to compute the eigenfunctions 
+tadpole.eig <- function(k,graph){
+x1 <- c(0,graph$get_edge_lengths()[1]*graph$mesh$PtE[graph$mesh$PtE[,1]==1,2]) 
+x2 <- c(0,graph$get_edge_lengths()[2]*graph$mesh$PtE[graph$mesh$PtE[,1]==2,2]) 
+
+if(k==0){ 
+  f.e1 <- rep(1,length(x1)) 
+  f.e2 <- rep(1,length(x2)) 
+  f1 = c(f.e1[1],f.e2[1],f.e1[-1], f.e2[-1]) 
+  f = list(phi=f1/sqrt(3)) 
+  
+} else {
+  f.e1 <- -2*sin(pi*k*1/2)*cos(pi*k*x1/2) 
+  f.e2 <- sin(pi*k*x2/2)                  
+  
+  f1 = c(f.e1[1],f.e2[1],f.e1[-1], f.e2[-1]) 
+  
+  if((k %% 2)==1){ 
+    f = list(phi=f1/sqrt(3)) 
+  } else { 
+    f.e1 <- (-1)^{k/2}*cos(pi*k*x1/2)
+    f.e2 <- cos(pi*k*x2/2)
+    f2 = c(f.e1[1],f.e2[1],f.e1[-1],f.e2[-1]) 
+    f <- list(phi=f1,psi=f2/sqrt(3/2))
+  }
+}
+
+return(f)
+}
+```
+
+Implementation of $u$
+
+```{r}
+time_step <- 0.01
+T_final <- 2
+time_seq <- seq(0, T_final, by = time_step)
+h <- 0.01
+graph <- gets_graph_tadpole(h = h)
+# Compute the FEM matrices
+graph$compute_fem()
+x <- graph$mesh$V[, 1]
+y <- graph$mesh$V[, 2]
+edge_number <- graph$mesh$VtE[, 1]
+pos <- sum(edge_number == 1)+1
+order_to_plot <- function(v)return(c(v[1], v[3:pos], v[2], v[(pos+1):length(v)], v[2]))
+weights <- graph$mesh$weights
+```
+
+
+```{r}
+kappa <- 1
+alpha <- 0.51
+
+
+N_finite <- 1000
+EIGENVAL_alpha <- c()       # initialize empty vector for eigenvalues
+EIGENFUN <- NULL       # initialize NULL for eigenfunctions matrix
+INDEX <- c()
+
+for (j in 0:N_finite) {
+    lambda_j_alpha <- (kappa^2 + (j*pi/2)^2)^(alpha/2)
+    e_j <- tadpole.eig(j,graph)$phi
+    
+    EIGENVAL_alpha <- c(EIGENVAL_alpha, lambda_j_alpha)         # append scalar to vector
+    EIGENFUN <- cbind(EIGENFUN, e_j)            # append column to matrix
+    INDEX <- c(INDEX, j)
+    if (j>0 && (j %% 2 == 0)) {
+      lambda_j_alpha <- (kappa^2 + (j*pi/2)^2)^(alpha/2)
+      e_j <- tadpole.eig(j,graph)$psi
+      
+      EIGENVAL_alpha <- c(EIGENVAL_alpha, lambda_j_alpha)         # append scalar to vector
+      EIGENFUN <- cbind(EIGENFUN, e_j)            # append column to matrix
+      INDEX <- c(INDEX, j)
+    }
+}
+
+coeff <- 1*(1:length(INDEX))^-1
+coeff[11:length(coeff)] <- 0
+U_0 <- EIGENFUN %*% coeff
+```
+
+
+```{r}
+n_finite1 <- 10
+adjusted_n_finite1 <- n_finite1 + n_finite1/2 + 1
+U_true1 <- matrix(NA, nrow = length(x), ncol = length(time_seq))
+U_true1[, 1] <- U_0
+for (k in 1:length(time_seq)) {
+  aux_k <- rep(0, length(x))
+  for (j in 1:adjusted_n_finite1) {
+    decay_j <- exp(-time_seq[k]*EIGENVAL_alpha[j])
+    e_j <- EIGENFUN[, j]
+    inner_prod_j <- coeff[j]
+    aux_k <- aux_k + decay_j*inner_prod_j*e_j
+  }
+  U_true1[, k] <- aux_k
+}
+
+n_finite2 <- 100
+adjusted_n_finite2 <- n_finite2 + n_finite2/2 + 1
+U_true2 <- matrix(NA, nrow = length(x), ncol = length(time_seq))
+U_true2[, 1] <- U_0
+for (k in 1:length(time_seq)) {
+  aux_k <- rep(0, length(x))
+  for (j in 1:adjusted_n_finite2) {
+    decay_j <- exp(-time_seq[k]*EIGENVAL_alpha[j])
+    e_j <- EIGENFUN[, j]
+    inner_prod_j <- coeff[j]
+    aux_k <- aux_k + decay_j*inner_prod_j*e_j
+  }
+  U_true2[, k] <- aux_k
+}
+```
+
+
+
+```{r}
+x <- order_to_plot(x)
+y <- order_to_plot(y)
+max_error_at_each_time <- apply(abs(U_true1 - U_true2)/abs(U_true1), 2, max)
+
+U_true1 <- apply(U_true1, 2, order_to_plot)
+U_true2 <- apply(U_true2, 2, order_to_plot)
+
+# Create interactive plot
+fig <- plot_ly(x = ~time_seq, y = ~max_error_at_each_time, type = 'scatter', mode = 'lines+markers',
+               line = list(color = 'red', width = 2),
+               marker = list(size = 4),
+               name = "Max Error")
+
+fig <- fig %>% layout(title = "Max Error at Each Time Step",
+                      xaxis = list(title = "Time"),
+                      yaxis = list(title = "RELATIVE Max Error"))
+
+
+
+plot_data <- data.frame(
+  x = rep(x, times = ncol(U_true1)),
+  y = rep(y, times = ncol(U_true1)),
+  z_true1 = as.vector(U_true1),
+  z_true2 = as.vector(U_true2),
+  frame = rep(time_seq, each = length(x))
+)
+
+# Compute axis limits
+x_range <- range(x)
+y_range <- range(y)
+z_range <- range(c(U_true1, U_true2))
+
+# Initial plot setup (first frame only)
+p <- plot_ly(plot_data, frame = ~frame) %>%
+  add_trace(
+    x = ~x, y = ~y, z = ~z_true1,
+    type = "scatter3d", mode = "lines",
+    name = paste0("n_finite = ", n_finite1),
+    line = list(color = "blue", width = 2)
+  ) %>%
+  add_trace(
+    x = ~x, y = ~y, z = ~z_true2,
+    type = "scatter3d", mode = "lines",
+    name = paste0("n_finite = ", n_finite2),
+    line = list(color = "red", width = 2)
+  ) %>%
+  layout(
+    scene = list(
+      xaxis = list(title = "x", range = x_range),
+      yaxis = list(title = "y", range = y_range),
+      zaxis = list(title = "Value", range = z_range)
+    ),
+    updatemenus = list(
+      list(
+        type = "buttons", showactive = FALSE,
+        buttons = list(
+          list(label = "Play", method = "animate",
+               args = list(NULL, list(frame = list(duration = 100, redraw = TRUE), fromcurrent = TRUE))),
+          list(label = "Pause", method = "animate",
+               args = list(NULL, list(mode = "immediate", frame = list(duration = 0), redraw = FALSE)))
+        )
+      )
+    ),
+    title = "Time: 0"
+  )
+
+# Convert to plotly object with frame info
+pb <- plotly_build(p)
+
+# Inject custom titles into each frame
+for (i in seq_along(pb$x$frames)) {
+  t <- time_seq[i]
+  err <- signif(max_error_at_each_time[i], 4)
+  pb$x$frames[[i]]$layout <- list(title = paste0("Time: ", t, " | Max Error: ", err))
+}
+
+
+fig  # Display the plot
+pb
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

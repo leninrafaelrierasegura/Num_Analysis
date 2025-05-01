@@ -92,7 +92,7 @@ knitr::opts_chunk$set(
   # Include both R code and its results in output
   include = TRUE,     
   # Evaluate R code chunks
-  eval = TRUE,       
+  eval = FALSE,       
   # Enable caching of R code chunks for faster rendering
   cache = FALSE,      
   # Align figures in the center of the output
@@ -152,6 +152,14 @@ gets_graph_tadpole <- function(h){
   graph$build_mesh(h = h)
   return(graph)
 }
+h <- 0.05
+graph <- gets_graph_tadpole(h = h)
+
+# Plot the tadpole graph
+graph$plot() +
+  ggtitle("Tadpole graph") + 
+  theme_minimal() + 
+  theme(text = element_text(family = "Palatino"))
 ```
 
 Let $\Gamma_T = (\Vcal,\Ecal)$ characterize the tadpole graph with $\Vcal = \{v_1,v_2\}$ and $\Ecal = \{e_1,e_2\}$ as specified in Figure \ref{Interval.Circle.Tadpole}c. The left edge $e_1$ has length 1 and the circular edge $e_2$ has length 2. As discussed in Subsection \ref{subsec:prelim}, a point on $e_1$ is parameterized via $s=\left(e_1, t\right)$ for $t \in[0,1]$ and a point on $e_2$ via $s=\left(e_2, t\right)$ for $t\in[0,2]$. One can verify that $-\Delta_\Gamma$ has eigenvalues $0,\left\{(i \pi / 2)^2\right\}_{i \in \mathbb{N}}$ and $\left\{(i \pi / 2)^2\right\}_{2 i \in \mathbb{N}}$ with corresponding eigenfunctions $\phi_0$, $\left\{\phi_i\right\}_{i \in \mathbb{N}}$, and $\left\{\psi_i\right\}_{2 i \in \mathbb{N}}$ given by $\phi_0(s)=1 / \sqrt{3}$ and 
@@ -203,33 +211,27 @@ return(f)
 Implementation of $u$
 
 ```{r}
-h <- 0.001
-graph <- gets_graph_tadpole(h = h)
 # Compute the FEM matrices
 graph$compute_fem()
 G <- graph$mesh$G
 C <- graph$mesh$C
 x <- graph$mesh$V[, 1]
 y <- graph$mesh$V[, 2]
-edge_number <- graph$mesh$VtE[, 1]
-pos <- sum(edge_number == 1)+1
-order_to_plot <- function(v)return(c(v[1], v[3:pos], v[2], v[(pos+1):length(v)], v[2]))
 weights <- graph$mesh$weights
 # Initial condition
-U_0 <- 10*exp(-((x-1)^2 + (y)^2))
+U_0 <- 10*exp(-((x-4)^2 + (y-4)^2))
 
-T_final <- 0.1
-time_step <- 0.001
-time_seq <- seq(0, T_final, by = time_step)
+time_step <- 0.1
+time_seq <- seq(0,pi, by = time_step)
 
-U_true <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
-U_true[, 1] <- U_0
+U_mat <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
+U_mat[, 1] <- U_0
 ```
 
 
 ```{r}
 kappa <- 1
-alpha <- 2
+alpha <- 0.8
 beta <- alpha/2
 ```
 
@@ -241,154 +243,16 @@ n_finite <- 100
 for (k in 1:(length(time_seq) - 1)) {
   aux_k <- rep(0, nrow(C))
   for (j in 0:n_finite) {
-    decay_j <- exp(-time_seq[k+1]*(kappa^2 + (j*pi/2)^2)^(alpha/2))
+  decay_j <- exp(-time_seq[k+1]*(kappa^2 + (j*pi/2)^2)^(alpha/2))
+  if (j %% 2 == 0) {
+    e_j <- tadpole.eig(j,graph)$psi
+  } else {
     e_j <- tadpole.eig(j,graph)$phi
-    aux_k <- aux_k + decay_j*sum(U_0*e_j*weights)*e_j
-    if (j>0 && (j %% 2 == 0)) {
-      e_j <- tadpole.eig(j,graph)$psi
-      aux_k <- aux_k + decay_j*sum(U_0*e_j*weights)*e_j
-      }
-    }
-  U_true[, k + 1] <- aux_k
+  }
+  sum_j <- decay_j*sum(U_0*e_j*weights)*e_j
+  aux_k <- aux_k + sum_j
+}
+  U_mat[, k + 1] <- aux_k
 }
 ```
-
-```{r}
-# Precompute the LHS matrix
-LHS <- (1+time_step*kappa^2)*C+time_step*G
-# Initialize U matrix to store solution at each time step
-U_approx <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
-U_approx[, 1] <- U_0
-
-# Time-stepping loop
-for (k in 1:(length(time_seq) - 1)) {
-  RHS <- C%*%U_approx[, k]
-  U_approx[, k + 1] <- as.matrix(solve(LHS, RHS))
-}
-```
-
-
-
-
-```{r}
-x <- order_to_plot(x)
-y <- order_to_plot(y)
-max_error_at_each_time <- apply(abs(U_true - U_approx), 2, max)
-
-U_true <- apply(U_true, 2, order_to_plot)
-U_approx <- apply(U_approx, 2, order_to_plot)
-
-# Create interactive plot
-fig <- plot_ly(x = ~time_seq, y = ~max_error_at_each_time, type = 'scatter', mode = 'lines+markers',
-               line = list(color = 'red', width = 2),
-               marker = list(size = 4),
-               name = "Max Error")
-
-fig <- fig %>% layout(title = "Max Error at Each Time Step",
-                      xaxis = list(title = "Time"),
-                      yaxis = list(title = "Max Error"))
-
-fig  # Display the plot
-
-
-plot_data <- data.frame(
-  x = rep(x, times = ncol(U_true)),
-  y = rep(y, times = ncol(U_true)),
-  z_true = as.vector(U_true),
-  z_approx = as.vector(U_approx),
-  frame = rep(time_seq, each = length(x))
-)
-
-# Compute axis limits
-x_range <- range(x)
-y_range <- range(y)
-z_range <- range(c(U_true, U_approx))
-
-# Initial plot setup (first frame only)
-p <- plot_ly(plot_data, frame = ~frame) %>%
-  add_trace(
-    x = ~x, y = ~y, z = ~z_true,
-    type = "scatter3d", mode = "lines",
-    name = "True",
-    line = list(color = "blue", width = 2)
-  ) %>%
-  add_trace(
-    x = ~x, y = ~y, z = ~z_approx,
-    type = "scatter3d", mode = "lines",
-    name = "Approximation",
-    line = list(color = "red", width = 2)
-  ) %>%
-  layout(
-    scene = list(
-      xaxis = list(title = "x", range = x_range),
-      yaxis = list(title = "y", range = y_range),
-      zaxis = list(title = "Value", range = z_range)
-    ),
-    updatemenus = list(
-      list(
-        type = "buttons", showactive = FALSE,
-        buttons = list(
-          list(label = "Play", method = "animate",
-               args = list(NULL, list(frame = list(duration = 100, redraw = TRUE), fromcurrent = TRUE))),
-          list(label = "Pause", method = "animate",
-               args = list(NULL, list(mode = "immediate", frame = list(duration = 0), redraw = FALSE)))
-        )
-      )
-    ),
-    title = "Time: 0"
-  )
-
-# Convert to plotly object with frame info
-pb <- plotly_build(p)
-
-# Inject custom titles into each frame
-for (i in seq_along(pb$x$frames)) {
-  t <- time_seq[i]
-  err <- signif(max_error_at_each_time[i], 4)
-  pb$x$frames[[i]]$layout <- list(title = paste0("Time: ", t, " | Max Error: ", err))
-}
-
-pb
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
