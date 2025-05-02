@@ -1,2 +1,7 @@
 To github.com:leninrafaelrierasegura/Num_Analysis.git
    bb57a7b..51cc867  main -> main
+remote: warning: See https://gh.io/lfs for more information.        
+remote: warning: File _site/Comparison3.html is 63.74 MB; this is larger than GitHub's recommended maximum file size of 50.00 MB        
+remote: warning: GH001: Large files detected. You may want to try Git Large File Storage - https://git-lfs.github.com.        
+To github.com:leninrafaelrierasegura/Num_Analysis.git
+   51cc867..4f4030d  main -> main
