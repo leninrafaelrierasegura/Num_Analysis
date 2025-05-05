@@ -1,6 +1,6 @@
 {
   "R": {
-    "Version": "4.4.3",
+    "Version": "4.5.0",
     "Repositories": [
       {
         "Name": "CRAN",
@@ -22,7 +22,7 @@
     },
     "INLA": {
       "Package": "INLA",
-      "Version": "25.04.16",
+      "Version": "25.05.01",
       "Source": "Repository",
       "Repository": "https://inla.r-inla-download.org/R/testing",
       "Requirements": [
@@ -41,7 +41,7 @@
         "utils",
         "withr"
       ],
-      "Hash": "5a1d04ce2020272cf7cce0b895115820"
+      "Hash": "911159d8dde577de05d0f23fdc1a47ec"
     },
     "KernSmooth": {
       "Package": "KernSmooth",
@@ -538,7 +538,7 @@
     },
     "grateful": {
       "Package": "grateful",
-      "Version": "0.2.11",
+      "Version": "0.2.12",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -550,7 +550,7 @@
         "rstudioapi",
         "utils"
       ],
-      "Hash": "bc7a709941fb8b3b6ce90aae0ae99e34"
+      "Hash": "f67b9143cd353a75636e0ee2ab411570"
     },
     "gtable": {
       "Package": "gtable",
@@ -1270,13 +1270,13 @@
     },
     "utf8": {
       "Package": "utf8",
-      "Version": "1.2.4",
+      "Version": "1.2.5",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
         "R"
       ],
-      "Hash": "62b65c52671e6665f803ff02954446e9"
+      "Hash": "ed553a57e9eb21f4d0298fbc1ad7b4df"
     },
     "uuid": {
       "Package": "uuid",

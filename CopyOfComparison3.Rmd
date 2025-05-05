@@ -8,10 +8,10 @@ output:
     theme: flatly
     code_folding: show # class.source = "fold-hide" to hide code and add a button to show it
     df_print: paged
-    toc: true
-    toc_float:
-      collapsed: true
-      smooth_scroll: true
+    # toc: true
+    # toc_float:
+    #   collapsed: true
+    #   smooth_scroll: true
     number_sections: false
     fig_caption: true
     code_download: true
@@ -117,6 +117,106 @@ truncate_to_two <- function(x) {
 }
 ```
 
+```{r}
+my.get.roots <- function(order, beta) {
+  mt <- get(paste0("m", order, "table"))
+  rb <- rep(0, order + 1)
+  rc <- rep(0, order)
+  if(order == 1) {
+      rc = approx(mt$beta, mt[[paste0("rc")]], beta)$y
+    } else {
+      rc = sapply(1:order, function(i) {
+        approx(mt$beta, mt[[paste0("rc.", i)]], beta)$y
+      })
+    }
+    rb = sapply(1:(order+1), function(i) {
+      approx(mt$beta, mt[[paste0("rb.", i)]], xout = beta)$y
+    })
+    factor = approx(mt$beta, mt$factor, xout = beta)$y
+  return(list(rb = rb, rc = rc, factor = factor))
+}
+
+m1table <- rSPDE:::m1table
+m2table <- rSPDE:::m2table
+m3table <- rSPDE:::m3table
+m4table <- rSPDE:::m4table
+
+poly_from_roots <- function(roots) {
+  coef <- 1
+  for (r in roots) {
+    coef <- convolve(coef, c(1, -r), type = "open")
+  }
+  return(rev(coef))
+}
+
+compute_sum_poly <- function(factor, pr_roots, pl_roots, cte) {
+  
+  # Coefficients of p(x) and q(x)
+  pr_coef <- c(0, poly_from_roots(pr_roots))
+  pl_coef <- poly_from_roots(pl_roots)
+  
+  pr_plus_pl_coef <- factor * pr_coef + cte * pl_coef
+  pr_plus_pl_roots <- polyroot(rev(pr_plus_pl_coef))
+
+  return(list(new_factor = pr_plus_pl_coef[1], pr_plus_pl_roots = Re(pr_plus_pl_roots)))
+}
+
+my.fractional.operators <- function(L, # kappa^2C + G
+                                 beta,
+                                 C,
+                                 scale.factor, # kappa^2
+                                 m = 1,
+                                 time_step) {
+
+  C <- Matrix::Diagonal(dim(C)[1], rowSums(C)) # lumped
+  Ci <- Matrix::Diagonal(dim(C)[1], 1 / rowSums(C)) # lumped 
+  I <- Matrix::Diagonal(dim(C)[1])
+  L <- L / scale.factor # C + G/kappa^2
+  LCi <- L %*% Ci
+  roots <- my.get.roots(m, beta)
+  Pl.roots <- roots$rb
+  Pr.roots <- roots$rc
+  factor <- roots$factor
+  new_factor_and_roots <- compute_sum_poly(factor, Pr.roots, Pl.roots, time_step)
+  
+  new_roots <- new_factor_and_roots$pr_plus_pl_roots
+  new_factor <- new_factor_and_roots$new_factor
+  
+  Pr_plus_Pl.factors <- list()
+  Pr_plus_Pl.factors[[1]] <- I - LCi * new_roots[1]
+  
+  if (length(new_roots) > 1) {
+    for (i in 2:length(new_roots)) {
+      Pr_plus_Pl.factors[[i]] <- I - LCi * new_roots[i]
+    }
+  }
+  Pr.factors <- list()
+  Pr.factors[[1]] <- I - LCi * roots$rc[1]
+
+  if (length(roots$rc) > 1) {
+    for (i in 2:length(roots$rc)) {
+      Pr.factors[[i]] <- I - LCi * roots$rc[i]
+    }
+  }
+  
+  #Pr.factors[[length(Pr.factors) + 1]] <- I
+   
+  output <- list(
+    Ci = Ci,
+    C = C,
+    LCi = LCi,
+    L = L,
+    m = m,
+    beta = beta,
+    factor = factor,
+    new_factor = new_factor,
+    Pr.factors = Pr.factors,
+    Pr_plus_Pl.factors = Pr_plus_Pl.factors
+  )
+  return(output)
+}
+```
+
 
 
 
@@ -166,7 +266,7 @@ gets_graph_tadpole <- function(h){
 }
 ```
 
-Let $\Gamma_T = (\Vcal,\Ecal)$ characterize the tadpole graph with $\Vcal = \{v_1,v_2\}$ and $\Ecal = \{e_1,e_2\}$ as specified in Figure \ref{Interval.Circle.Tadpole}c. The left edge $e_1$ has length 1 and the circular edge $e_2$ has length 2. As discussed in Subsection \ref{subsec:prelim}, a point on $e_1$ is parameterized via $s=\left(e_1, t\right)$ for $t \in[0,1]$ and a point on $e_2$ via $s=\left(e_2, t\right)$ for $t\in[0,2]$. One can verify that $-\Delta_\Gamma$ has eigenvalues $0,\left\{(i \pi / 2)^2\right\}_{i \in \mathbb{N}}$ and $\left\{(i \pi / 2)^2\right\}_{2 i \in \mathbb{N}}$ with corresponding eigenfunctions $\phi_0$, $\left\{\phi_i\right\}_{i \in \mathbb{N}}$, and $\left\{\psi_i\right\}_{2 i \in \mathbb{N}}$ given by $\phi_0(s)=1 / \sqrt{3}$ and 
+Let $\Gamma_T = (\Vcal,\Ecal)$ characterize the tadpole graph with $\Vcal = \{v_1,v_2\}$ and $\Ecal = \{e_1,e_2\}$. The left edge $e_1$ has length 1 and the circular edge $e_2$ has length 2. As discussed before, a point on $e_1$ is parameterized via $s=\left(e_1, t\right)$ for $t \in[0,1]$ and a point on $e_2$ via $s=\left(e_2, t\right)$ for $t\in[0,2]$. One can verify that $-\Delta_\Gamma$ has eigenvalues $0,\left\{(i \pi / 2)^2\right\}_{i \in \mathbb{N}}$ and $\left\{(i \pi / 2)^2\right\}_{2 i \in \mathbb{N}}$ with corresponding eigenfunctions $\phi_0$, $\left\{\phi_i\right\}_{i \in \mathbb{N}}$, and $\left\{\psi_i\right\}_{2 i \in \mathbb{N}}$ given by $\phi_0(s)=1 / \sqrt{3}$ and 
 \begin{equation*}
     \phi_i(s)=C_{\phi, i}\begin{cases}
         -2 \sin (\frac{i\pi}{2}) \cos (\frac{i \pi t}{2}), & s \in e_1, \\
@@ -238,13 +338,68 @@ weights <- graph$mesh$weights
 
 ```{r}
 kappa <- 1
-alpha <- 0.5
+alpha <- 0.5 # from 0.5 to 2
+m = 2
 beta <- alpha/2
 L <- kappa^2*C + G
-op <- fractional.operators(L, beta, C, scale.factor = kappa^2, m = 1)
+```
+
+
+```{r}
+my_op <- my.fractional.operators(L, beta, C, scale.factor = kappa^2, m = m, time_step)
+
+my.solver <- function(obj, v){
+  Pr.factors <- obj$Pr.factors
+  Pr_plus_Pl.factors <- obj$Pr_plus_Pl.factors
+  m <- obj$m
+  C <- obj$C
+  Ci <- obj$Ci
+  factor <- obj$factor
+  new_factor <- obj$new_factor
+  if (m==1){
+    temp <- solve(Pr_plus_Pl.factors[[2]], 
+                  Pr.factors[[1]] %*% solve(
+                    Pr_plus_Pl.factors[[1]], 
+                    C%*%v))
+  } else if (m==2){
+    temp <- solve(Pr_plus_Pl.factors[[3]], 
+                  Pr.factors[[2]] %*% solve(
+                    Pr_plus_Pl.factors[[2]], 
+                    Pr.factors[[1]] %*% solve(
+                      Pr_plus_Pl.factors[[1]], 
+                      C%*%v)))
+  } else if (m==3){
+    temp <- solve(Pr_plus_Pl.factors[[4]], 
+                  Pr.factors[[3]] %*% solve(
+                    Pr_plus_Pl.factors[[3]], 
+                    Pr.factors[[2]] %*% solve(
+                      Pr_plus_Pl.factors[[2]], 
+                      Pr.factors[[1]] %*% solve(
+                        Pr_plus_Pl.factors[[1]], 
+                        C%*%v))))
+  } else if (m==4){
+    temp <- solve(Pr_plus_Pl.factors[[5]], 
+                  Pr.factors[[4]] %*% solve(
+                    Pr_plus_Pl.factors[[4]], 
+                    Pr.factors[[3]] %*% solve(
+                      Pr_plus_Pl.factors[[3]], 
+                      Pr.factors[[2]] %*% solve(
+                        Pr_plus_Pl.factors[[2]], 
+                        Pr.factors[[1]] %*% solve(
+                          Pr_plus_Pl.factors[[1]], 
+                          C%*%v)))))
+  }
+  return((factor/new_factor) * Ci %*% temp)
+}
+```
+
+
+```{r}
+op <- fractional.operators(L, beta, C, scale.factor = kappa^2, m = m)
 Pl <- op$Pl
 Pr <- op$Pr
 Ci <- op$Ci
+C <- op$C
 ```
 
 
@@ -287,7 +442,15 @@ for (k in 1:length(time_seq)) {
 }
 ```
 
+```{r}
+U_approx <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
+U_approx[, 1] <- U_0
 
+# Time-stepping loop
+for (k in 1:(length(time_seq) - 1)) {
+  U_approx[, k + 1] <- as.matrix(my.solver(my_op, U_approx[, k]))
+}
+```
 
 ```
 {r}
@@ -310,7 +473,49 @@ for (k in 1:(length(time_seq) - 1)) {
 }
 ```
 
-```{r}
+We arrive at the scheme
+
+\begin{equation}
+(P_r^TC+\tau P_\ell^T)U^{k+1} = P_r^TCU^k
+\label{eq:scheme}
+\end{equation}
+where
+\begin{equation}
+P_r = c_m\prod_{i=1}^m (I-r_{1i}C^{-1}L)\quad\text{and}\quad P_\ell = b_{m+1}C\prod_{j=1}^{m+1} (I-r_{2j}C^{-1}L)
+\end{equation}
+Observe that 
+\begin{equation}
+P_r^T = c_m\prod_{i=m}^1 (I-r_{1i}LC^{-1})\quad\text{and}\quad P_\ell^T = b_{m+1}\prod_{j=m+1}^{1} (I-r_{2j}LC^{-1})\cdot C
+\end{equation}
+Replacing these two in our scheme we get
+\begin{equation}
+\left(c_m\prod_{i=m}^1 (I-r_{1i}LC^{-1})+\tau b_{m+1}\prod_{j=m+1}^{1} (I-r_{2j}LC^{-1})\right)CU^{k+1} = c_m\prod_{i=m}^1 (I-r_{1i}LC^{-1})\cdot CU^k
+\end{equation}
+We can equivalently write this as
+\begin{equation}
+\left(\dfrac{c_m}{b_{m+1}}\prod_{i=1}^m (I-r_{1i}LC^{-1})+\tau \prod_{j=1}^{m+1} (I-r_{2j}LC^{-1})\right)CU^{k+1} = \dfrac{c_m}{b_{m+1}}\prod_{i=1}^m (I-r_{1i}LC^{-1})\cdot CU^k
+\end{equation}
+
+We need to compute the roots of the polynomial
+\begin{equation}
+R(x) = \dfrac{c_m}{b_{m+1}} \prod_{i=1}^m (x-r_{1i})+\tau \prod_{j=1}^{m+1} (x-r_{2j}) 
+\end{equation}
+Say $R$ has leading coefficient $\tau$ and $m+1$ roots $R_k$ for $k=1,\ldots,m+1$. That is,
+\begin{equation}
+R(x) = \tau\prod_{k=1}^{m+1} (x-R_k)
+\end{equation}
+We can then write our scheme as 
+\begin{equation}
+\left(\tau\prod_{k=1}^{m+1} (I-R_kLC^{-1})\right)CU^{k+1} = \dfrac{c_m}{b_{m+1}}\prod_{i=1}^m (I-r_{1i}LC^{-1})\cdot CU^k
+\end{equation}
+That is,
+\begin{equation}
+U^{k+1} = \dfrac{c_m}{b_{m+1}}\dfrac{1}{\tau}C^{-1}\prod_{k=1}^{m+1} (I-R_kLC^{-1})^{-1}\prod_{i=1}^m (I-r_{1i}LC^{-1})\cdot CU^k
+\end{equation}
+
+
+```
+{r}
 LHS <- t(Pr)%*% C + time_step * t(Pl)
 # Initialize U matrix to store solution at each time step
 U_approx <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
@@ -324,23 +529,6 @@ for (k in 1:(length(time_seq) - 1)) {
 }
 ```
 
-
-```
-{r}
-Pr.apply.mult <- function(v){return(Pr.mult(op, v))}
-aa <- apply(C, 2, Pr.apply.mult)
-LHS <- aa + time_step * Pl
-# Initialize U matrix to store solution at each time step
-U_approx <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
-U_approx[, 1] <- U_0
-
-# Time-stepping loop
-for (k in 1:(length(time_seq) - 1)) {
-  # Compute the right-hand side for the second equation
-  RHS <- aa %*% U_approx[, k]
-  U_approx[, k + 1] <- as.matrix(solve(LHS, RHS))
-}
-```
 
 ```{r}
 x <- order_to_plot(x)
@@ -433,9 +621,6 @@ for (i in seq_along(pb$x$frames)) {
   err <- signif(max_error_at_each_time[i], 4)
   pb$x$frames[[i]]$layout <- list(title = paste0("Time: ", t, " | Max Error: ", err))
 }
-
-# Create 3D scatter plot
-pic <- plot_ly(x = ~x, y = ~y, z = ~U_true[,2], type = 'scatter3d', mode = 'lines')
 ```
 
 
@@ -446,10 +631,6 @@ fig  # Display the plot
 
 ```{r, fig.height = 6, out.width = "100%", fig.cap = captioner("Caption")}
 pb
-```
-
-```{r}
-pic
 ```
 
 
