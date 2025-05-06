@@ -146,19 +146,58 @@ poly_from_roots <- function(roots) {
   for (r in roots) {
     coef <- convolve(coef, c(1, -r), type = "open")
   }
-  return(rev(coef))
+  return(coef) # returns in increasing order like a+bx+cx^2+...
+}
+ 
+# Group complex roots into conjugate pairs
+get_conjugate_pairs <- function(roots) {
+  used <- rep(FALSE, length(roots))
+  pairs <- list()
+  for (i in seq_along(roots)) {
+    if (!used[i]) {
+      conj_root <- Conj(roots[i])
+      # Find its conjugate (within tolerance)
+      j <- which(!used & abs(Re(roots) - Re(conj_root)) < 1e-8 & abs(Im(roots) - Im(conj_root)) < 1e-8)
+      j <- j[j != i]
+      if (length(j) > 0) {
+        used[c(i, j[1])] <- TRUE
+        pairs[[length(pairs) + 1]] <- c(roots[i], roots[j[1]])
+      }
+    }
+  }
+  return(pairs)
 }
 
 compute_sum_poly <- function(factor, pr_roots, pl_roots, cte) {
   
-  # Coefficients of p(x) and q(x)
-  pr_coef <- c(0, poly_from_roots(pr_roots))
-  pl_coef <- poly_from_roots(pl_roots)
-  
+  pr_coef <- c(0, poly_from_roots(pr_roots)) # in decreasing order like x^n+bx^(n-1)+cx^(n-2)+...
+  pl_coef <- poly_from_roots(pl_roots) # in decreasing order like x^n+bx^(n-1)+cx^(n-2)+...
   pr_plus_pl_coef <- factor * pr_coef + cte * pl_coef
-  pr_plus_pl_roots <- polyroot(rev(pr_plus_pl_coef))
+  return(pr_plus_pl_coef)
+}
 
-  return(list(new_factor = pr_plus_pl_coef[1], pr_plus_pl_roots = Re(pr_plus_pl_roots)))
+compute_real_roots_and_complex_coef <- function(pr_plus_pl_coef) {
+
+  pr_plus_pl_roots <- polyroot(rev(pr_plus_pl_coef))
+  
+  real_roots <- Re(pr_plus_pl_roots[abs(Im(pr_plus_pl_roots)) < 1e-8])
+  complex_roots <- pr_plus_pl_roots[abs(Im(pr_plus_pl_roots)) >= 1e-8]
+  
+  complex_poly_coefs <- list()
+  if (length(complex_roots) > 0) {
+    pairs <- get_conjugate_pairs(complex_roots)
+    for (pair in pairs) {
+      coef <- rev(Re(poly_from_roots(c(pair[1], pair[2]))))  # returns in x^2 + bx + c order
+      complex_poly_coefs[[length(complex_poly_coefs) + 1]] <- round(coef, 12)
+    }
+  } else {
+    complex_poly_coefs <- list()  # No complex roots
+  }
+  
+  return(list(new_factor = pr_plus_pl_coef[1], 
+              pr_plus_pl_roots = pr_plus_pl_roots, 
+              real_roots = real_roots, 
+              complex_poly_coefs = complex_poly_coefs))
 }
 
 my.fractional.operators <- function(L, # kappa^2C + G
@@ -177,19 +216,25 @@ my.fractional.operators <- function(L, # kappa^2C + G
   Pl.roots <- roots$rb
   Pr.roots <- roots$rc
   factor <- roots$factor
-  new_factor_and_roots <- compute_sum_poly(factor, Pr.roots, Pl.roots, time_step)
+  new_factor_and_roots <- compute_real_roots_and_complex_coef(compute_sum_poly(factor, Pr.roots, Pl.roots, time_step))
   
-  new_roots <- new_factor_and_roots$pr_plus_pl_roots
+  new_real_roots <- new_factor_and_roots$real_roots
   new_factor <- new_factor_and_roots$new_factor
+  complex_poly_coefs <- new_factor_and_roots$complex_poly_coefs
   
   Pr_plus_Pl.factors <- list()
-  Pr_plus_Pl.factors[[1]] <- I - LCi * new_roots[1]
-  
-  if (length(new_roots) > 1) {
-    for (i in 2:length(new_roots)) {
-      Pr_plus_Pl.factors[[i]] <- I - LCi * new_roots[i]
+  if (length(new_real_roots) >= 1) {
+    for (i in 1:length(new_real_roots)) {
+      Pr_plus_Pl.factors[[i]] <- LCi - new_real_roots[i] * I
     }
   }
+  length_now <- length(Pr_plus_Pl.factors)
+  if(length(complex_poly_coefs) >= 1) {
+    for (i in 1:length(complex_poly_coefs)) {
+    }
+    Pr_plus_Pl.factors[[length_now + i]] <- LCi %*% LCi + complex_poly_coefs[[i]][2] * LCi + complex_poly_coefs[[i]][3] * I
+  }
+  
   Pr.factors <- list()
   Pr.factors[[1]] <- I - LCi * roots$rc[1]
 
@@ -339,7 +384,7 @@ weights <- graph$mesh$weights
 ```{r}
 kappa <- 1
 alpha <- 0.5 # from 0.5 to 2
-m = 2
+m = 4
 beta <- alpha/2
 L <- kappa^2*C + G
 ```
@@ -513,6 +558,12 @@ That is,
 U^{k+1} = \dfrac{c_m}{b_{m+1}}\dfrac{1}{\tau}C^{-1}\prod_{k=1}^{m+1} (I-R_kLC^{-1})^{-1}\prod_{i=1}^m (I-r_{1i}LC^{-1})\cdot CU^k
 \end{equation}
 
+
+What if 
+\begin{equation}
+R(x) = \tau(x^2+ax+b)\prod_{k=1}^{m-1} (x-R_k)
+\end{equation}
+then
 
 ```
 {r}
