@@ -81,9 +81,10 @@ lines(x, f_x(x)-g_x(x), col = "black")  # Add x-axis
 
 
 
-compute_real_roots_and_complex_coef(c(1,-1,3,-3,2,-2))
-compute_real_roots_and_complex_coef(c(1,-6,5,-30))
-a <- compute_real_roots_and_complex_coef(c(1,0,-7,6))
+compute_real_roots_and_complex_coef(c(1,-1,3,-3,2,-2)) # (x^2+1)(x^2+2)(x-1)
+compute_real_roots_and_complex_coef(c(1,-1,0,0,1,-1)) # (x^4+1)(x-1)
+compute_real_roots_and_complex_coef(c(1,-6,5,-30)) # (x^2+5)(x-6)
+a <- compute_real_roots_and_complex_coef(c(1,0,-7,6)) # (x-1)(x+3)(x-2)
 a$complex_poly_coefs |> length()
 
 for (i in 1:length(a$complex_poly_coefs)){
