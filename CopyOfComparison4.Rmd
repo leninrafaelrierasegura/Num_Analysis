@@ -487,7 +487,7 @@ R(x) = \gamma(x-z)(x-\bar{z})(x-r)
 \end{equation}
 
 ```{r}
-h <- 0.05
+h <- 0.01
 graph <- gets_graph_tadpole(h = h)
 T_final <- 2
 time_step <- 0.01

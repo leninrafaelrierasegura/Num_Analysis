@@ -552,6 +552,19 @@
       ],
       "Hash": "f67b9143cd353a75636e0ee2ab411570"
     },
+    "gsignal": {
+      "Package": "gsignal",
+      "Version": "0.3-7",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "Rcpp",
+        "grDevices",
+        "pracma"
+      ],
+      "Hash": "2699c091614fc1e0920b503185e6064d"
+    },
     "gtable": {
       "Package": "gtable",
       "Version": "0.3.6",
@@ -919,6 +932,20 @@
         "Rcpp"
       ],
       "Hash": "6b8177fd19982f0020743fadbfdbd933"
+    },
+    "pracma": {
+      "Package": "pracma",
+      "Version": "2.4.4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "grDevices",
+        "graphics",
+        "stats",
+        "utils"
+      ],
+      "Hash": "44bc172d47d1ea0a638d9f299e321203"
     },
     "promises": {
       "Package": "promises",

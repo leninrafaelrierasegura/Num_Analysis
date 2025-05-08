@@ -92,7 +92,7 @@ knitr::opts_chunk$set(
   # Include both R code and its results in output
   include = TRUE,     
   # Evaluate R code chunks
-  eval = FALSE,       
+  eval = TRUE,       
   # Enable caching of R code chunks for faster rendering
   cache = FALSE,      
   # Align figures in the center of the output
@@ -170,7 +170,79 @@ poly_from_roots <- function(roots) {
   }
   return(coef) # returns in increasing order like a+bx+cx^2+...
 }
- 
+```
+
+
+## For scheme 4
+
+This scheme
+
+\begin{equation}
+U^{k+1} = C^{-1}\left(\sum_{k=1}^{m+1} a_k(LC^{-1}-p_kI)^{-1} + rI\right) CU^k
+\end{equation}
+
+```{r}
+compute_partial_fraction_param <- function(factor, pr_roots, pl_roots, cte) {
+  pr_coef <- c(0, poly_from_roots(pr_roots)) # in decreasing order like x^n+bx^(n-1)+cx^(n-2)+...
+  pl_coef <- poly_from_roots(pl_roots) # in decreasing order like x^n+bx^(n-1)+cx^(n-2)+...
+  # factor_pr_coef <- factor * pr_coef
+  # pr_plus_pl_coef <- factor_pr_coef + cte * pl_coef
+  factor_pr_coef <- pr_coef
+  pr_plus_pl_coef <- factor_pr_coef + cte/factor * pl_coef
+  res <- gsignal::residue(factor_pr_coef, pr_plus_pl_coef)
+  return(list(r = res$r, p = res$p, k = res$k)) # in decreasing order like x^n+bx^(n-1)+cx^(n-2)+...
+}
+
+my.fractional.operators.frac <- function(L, # kappa^2C + G
+                                 beta,
+                                 C,
+                                 scale.factor, # kappa^2
+                                 m = 1,
+                                 time_step) {
+
+  C <- Matrix::Diagonal(dim(C)[1], rowSums(C)) # lumped
+  Ci <- Matrix::Diagonal(dim(C)[1], 1 / rowSums(C)) # lumped 
+  I <- Matrix::Diagonal(dim(C)[1])
+  L <- L / scale.factor # C + G/kappa^2
+  LCi <- L %*% Ci
+  
+  roots <- my.get.roots(m, beta)
+  poles_rs_k <- compute_partial_fraction_param(roots$factor, roots$rc, roots$rb, time_step)
+
+  # Fill list
+  partial.fraction.factors <- list()
+  for (i in 1:(m+1)) {
+    partial.fraction.factors[[i]] <- (LCi - poles_rs_k$p[i] * I)/poles_rs_k$r[i]
+  }
+  partial.fraction.factors[[m+2]] <- ifelse(is.null(poles_rs_k$k), 0, poles_rs_k$k) * I
+  
+  return(list(Ci = Ci, C = C, LCi = LCi, L = L, m = m, beta = beta, partial.fraction.factors = partial.fraction.factors))
+}
+
+my.solver.frac <- function(obj, v){
+  m <- obj$m
+  C <- obj$C
+  Ci <- obj$Ci
+  partial.fraction.factors <- obj$partial.fraction.factors
+  v <- C %*% v
+  output <- partial.fraction.factors[[m+2]] %*% v
+  for (i in 1:(m+1)) {
+    output <- output + solve(partial.fraction.factors[[i]], v)
+  }
+  return(Ci %*% output)
+}
+```
+
+
+## For scheme 3
+
+This scheme
+
+\begin{equation}
+U^{k+1} = \dfrac{c_m}{b_{m+1}}\dfrac{1}{\gamma}C^{-1}\prod_{k=1}^{m+1} (LC^{-1}-R_kI)^{-1}\prod_{i=1}^m (I-r_{1i}LC^{-1})\cdot CU^k
+\end{equation}
+
+```{r}
 # Given a set of complex roots, this function groups complex roots into conjugate pairs
 get_conjugate_pairs <- function(roots) {
   used <- rep(FALSE, length(roots))
@@ -219,7 +291,7 @@ compute_real_roots_and_complex_coef <- function(pr_plus_pl_coef) {
               complex_poly_coefs = complex_poly_coefs))
 }
 
-my.fractional.operators <- function(L, # kappa^2C + G
+my.fractional.operators.rat <- function(L, # kappa^2C + G
                                  beta,
                                  C,
                                  scale.factor, # kappa^2
@@ -249,8 +321,6 @@ my.fractional.operators <- function(L, # kappa^2C + G
     }
   }
   
-  print(length(Pr_plus_Pl.factors))
-  
   length_now <- length(Pr_plus_Pl.factors)
   if(length(complex_poly_coefs) >= 1) {
     for (i in 1:length(complex_poly_coefs)) {
@@ -275,7 +345,7 @@ my.fractional.operators <- function(L, # kappa^2C + G
   ))
 }
 
-my.solver <- function(obj, v){
+my.solver.rat <- function(obj, v){
   Pr.factors <- obj$Pr.factors
   Pr_plus_Pl.factors <- obj$Pr_plus_Pl.factors
   m <- obj$m
@@ -319,6 +389,7 @@ my.solver <- function(obj, v){
   return((factor/new_factor) * Ci %*% temp)
 }
 ```
+
 
 
 We want to solve the fractional diffusion equation
@@ -525,7 +596,7 @@ U^{k+1} = C^{-1}\left(\sum_{k=1}^{m+1} a_k(LC^{-1}-p_kI)^{-1} + rI\right) CU^k
 
 
 ```{r}
-h <- 0.01
+h <- 0.1
 graph <- gets_graph_tadpole(h = h)
 T_final <- 2
 time_step <- 0.01
@@ -547,14 +618,18 @@ weights <- graph$mesh$weights
 ```{r}
 kappa <- 1
 alpha <- 0.5 # from 0.5 to 2
-m = 4
+m = 2
 beta <- alpha/2
 L <- kappa^2*C + G
 ```
 
 # True solution
 
-```{r}
+## Eigenfunction
+ 
+ 
+```
+{r}
 # Parameters to construct U_0
 N_finite <- 4 # choose an even number
 adjusted_N_finite <- N_finite + N_finite/2 + 1
@@ -574,7 +649,7 @@ for (j in 0:N_finite) {
 }
 
 # Building the initial condition as \sum coeff_j EIGENFUN_j
-coeff <- 1*(1:adjusted_N_finite)^-1
+coeff <- 50*(1:adjusted_N_finite)^-1
 coeff[-5] <- 0
 U_0 <- EIGENFUN %*% coeff
 
@@ -589,28 +664,76 @@ for (k in 1:length(time_seq)) {
 }
 ```
 
+## Gaussian
+
 ```{r}
-my_op <- my.fractional.operators(L, beta, C, scale.factor = kappa^2, m = m, time_step)
+# Initial condition
+U_0 <- 10*exp(-((x-1)^2 + (y)^2))
+
+U_true <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
+U_true[, 1] <- U_0
+n_finite <- 1/h
+
+
+for (k in 1:(length(time_seq) - 1)) {
+  aux_k <- rep(0, nrow(C))
+  for (j in 0:n_finite) {
+    decay_j <- exp(-time_seq[k+1]*(kappa^2 + (j*pi/2)^2)^(alpha/2))
+    e_j <- tadpole.eig(j,graph)$phi
+    aux_k <- aux_k + decay_j*sum(U_0*e_j*weights)*e_j
+    if (j>0 && (j %% 2 == 0)) {
+      e_j <- tadpole.eig(j,graph)$psi
+      aux_k <- aux_k + decay_j*sum(U_0*e_j*weights)*e_j
+      }
+    }
+  U_true[, k + 1] <- aux_k
+}
+```
+
+
+# Solving it
+
+
+## with scheme 3
+
+```
+{r}
+my_op_rat <- my.fractional.operators.rat(L, beta, C, scale.factor = kappa^2, m = m, time_step)
 
 U_approx1 <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
 U_approx1[, 1] <- U_0
 
 # Time-stepping loop
 for (k in 1:(length(time_seq) - 1)) {
-  U_approx1[, k + 1] <- as.matrix(my.solver(my_op, U_approx1[, k]))
+  U_approx1[, k + 1] <- as.matrix(my.solver.rat(my_op_rat, U_approx1[, k]))
 }
 ```
 
+## with scheme 4
+
 ```{r}
+my_op_frac <- my.fractional.operators.frac(L, beta, C, scale.factor = kappa^2, m = m, time_step)
+
+U_approx2 <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
+U_approx2[, 1] <- U_0
+
+# Time-stepping loop
+for (k in 1:(length(time_seq) - 1)) {
+  U_approx2[, k + 1] <- as.matrix(my.solver.frac(my_op_frac, U_approx2[, k]))
+}
+```
+
+
+## with scheme 2
+
+```
+{r}
 op <- fractional.operators(L, beta, C, scale.factor = kappa^2, m = m)
 Pl <- op$Pl
 Pr <- op$Pr
 Ci <- op$Ci
 C <- op$C
-```
 
-
-```{r}
 LHS <- t(Pr)%*% C + time_step * t(Pl)
 # Initialize U matrix to store solution at each time step
 U_approx2 <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
@@ -624,8 +747,17 @@ for (k in 1:(length(time_seq) - 1)) {
 }
 ```
 
+
+## with scheme 1
+
 ```
 {r}
+op <- fractional.operators(L, beta, C, scale.factor = kappa^2, m = m)
+Pl <- op$Pl
+Pr <- op$Pr
+Ci <- op$Ci
+C <- op$C
+
 Pr.apply.mult <- function(v){return(Pr.mult(op, v))}
 Pl.apply.solve <- function(v){return(Pl.solve(op, v))}
 PliC <- apply(C, 2, Pl.apply.solve) # PlC^-1
@@ -654,9 +786,15 @@ y <- order_to_plot(y)
 
 #U_approx2 <- U_approx1
 
+mean_w <- function(v){return(mean(v*weights))}
+
 max_error_at_each_time1 <- apply((U_true - U_approx1)^2, 2, mean)
 max_error_at_each_time2 <- apply((U_true - U_approx2)^2, 2, mean)
 max_error_between_both_approx <- apply((U_approx1 - U_approx2)^2, 2, mean)
+
+error1 <- sqrt(time_step * sum(max_error_at_each_time1))
+error2 <- sqrt(time_step * sum(max_error_at_each_time2))
+errorb <- sqrt(time_step * sum(max_error_between_both_approx))
 
 U_true <- apply(U_true, 2, order_to_plot)
 U_approx1 <- apply(U_approx1, 2, order_to_plot)
@@ -670,7 +808,7 @@ fig <- fig %>% add_trace(
   x = ~time_seq, y = ~max_error_at_each_time1, type = 'scatter', mode = 'lines+markers',
   line = list(color = 'red', width = 2),
   marker = list(color = 'red', size = 4),
-  name = "Error  True and Approx 1"
+  name = paste0("Error  True and Approx 1: ", sprintf("%.3e", error1))
 )
 
 # Add second line (max_error_at_each_time2)
@@ -678,7 +816,7 @@ fig <- fig %>% add_trace(
   x = ~time_seq, y = ~max_error_at_each_time2, type = 'scatter', mode = 'lines+markers',
   line = list(color = 'blue', width = 2),
   marker = list(color = 'blue', size = 4),
-  name = "Error True and Approx 2"
+  name = paste0("Error  True and Approx 2: ", sprintf("%.3e", error2))
 )
 
 # Add third line (max_error_between_both_approx)
@@ -687,7 +825,7 @@ fig <- fig %>% add_trace(
   x = ~time_seq, y = ~max_error_between_both_approx, type = 'scatter', mode = 'lines+markers',
   line = list(color = 'orange', width = 2),
   marker = list(color = 'orange', size = 4),
-  name = "Error Between Approximations"
+  name = paste0("Error Between Approximations: ", sprintf("%.3e", errorb))
 )
 
 # Layout
