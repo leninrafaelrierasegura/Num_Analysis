@@ -38,6 +38,20 @@ compute_partial_fraction_param <- function(factor, pr_roots, pl_roots, cte) {
   return(list(factor_pr_coef = factor_pr_coef, pr_plus_pl_coef = pr_plus_pl_coef, r = res$r, poles = res$p, k = res$k)) # in decreasing order like x^n+bx^(n-1)+cx^(n-2)+...
 }
 
+
+
+# Example
+alpha <- 2 # from 0.5 to 2
+m = 2
+beta <- alpha/2
+
+roots <- my.get.roots(m, beta)
+compute_partial_fraction_param(roots$factor, roots$rc, roots$rb, time_step)
+
+
+
+# Example
+
 alpha <- 1 # from 0.5 to 2
 m = 4
 beta <- alpha/2

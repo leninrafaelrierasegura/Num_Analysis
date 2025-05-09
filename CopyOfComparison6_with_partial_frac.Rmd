@@ -92,7 +92,7 @@ knitr::opts_chunk$set(
   # Include both R code and its results in output
   include = TRUE,     
   # Evaluate R code chunks
-  eval = TRUE,       
+  eval = FALSE,       
   # Enable caching of R code chunks for faster rendering
   cache = FALSE,      
   # Align figures in the center of the output
@@ -205,7 +205,9 @@ my.fractional.operators.frac <- function(L, # kappa^2C + G
   I <- Matrix::Diagonal(dim(C)[1])
   L <- L / scale.factor # C + G/kappa^2
   LCi <- L %*% Ci
-  
+  if(beta == 1){
+    return(list(Ci = Ci, C = C, LCi = LCi, L = L, m = m, beta = beta, LHS = C + time_step * L))
+  } else{
   roots <- my.get.roots(m, beta)
   poles_rs_k <- compute_partial_fraction_param(roots$factor, roots$rc, roots$rb, time_step)
 
@@ -217,12 +219,17 @@ my.fractional.operators.frac <- function(L, # kappa^2C + G
   partial.fraction.factors[[m+2]] <- ifelse(is.null(poles_rs_k$k), 0, poles_rs_k$k) * I
   
   return(list(Ci = Ci, C = C, LCi = LCi, L = L, m = m, beta = beta, partial.fraction.factors = partial.fraction.factors))
+  }
 }
 
 my.solver.frac <- function(obj, v){
+  beta <- obj$beta
   m <- obj$m
   C <- obj$C
   Ci <- obj$Ci
+  if (beta == 1){
+    return(solve(obj$LHS, v))
+  } else {
   partial.fraction.factors <- obj$partial.fraction.factors
   #v <- C %*% v
   output <- partial.fraction.factors[[m+2]] %*% v
@@ -230,6 +237,7 @@ my.solver.frac <- function(obj, v){
     output <- output + solve(partial.fraction.factors[[i]], v)
   }
   return(Ci %*% output)
+  }
 }
 ```
 
@@ -605,7 +613,7 @@ U^{k+1} = C^{-1}\left(\sum_{k=1}^{m+1} a_k(LC^{-1}-p_kI)^{-1} + rI\right) (CU^k+
 \end{equation}
 
 ```{r}
-h <- 0.01
+h <- 0.001
 graph <- gets_graph_tadpole(h = h)
 T_final <- 2
 time_step <- 0.01
@@ -626,8 +634,8 @@ weights <- graph$mesh$weights
 
 ```{r}
 kappa <- 1
-alpha <- 1.99 # from 0.5 to 2
-m = 1
+alpha <- 2 # from 0.5 to 2
+m = 3
 beta <- alpha/2
 L <- kappa^2*C + G
 ```
@@ -867,7 +875,7 @@ fig <- fig %>% add_trace(
 # Add second line (max_error_at_each_time2)
 fig <- fig %>% add_trace(
   x = ~time_seq, y = ~max_error_at_each_time2, type = 'scatter', mode = 'lines+markers',
-  line = list(color = 'blue', width = 2),
+  line = list(color = 'blue', width = 2, dash = "dot"),
   marker = list(color = 'blue', size = 4),
   name = paste0("Error  True and Approx 2: ", sprintf("%.3e", error2))
 )
