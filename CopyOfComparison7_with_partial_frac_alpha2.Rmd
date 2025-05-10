@@ -162,17 +162,17 @@ my.get.roots <- function(order, beta) {
 }
 
 # Function the polynomial coefficients in increasing order like a+bx+cx^2+...
-poly_from_roots <- function(roots) {
+poly.from.roots <- function(roots) {
   
   coef <- 1
   for (r in roots) {coef <- convolve(coef, c(1, -r), type = "open")}
   return(coef)
 }
 # Function to compute the partial fraction parameters
-compute_partial_fraction_param <- function(factor, pr_roots, pl_roots, cte) {
+compute.partial.fraction.param <- function(factor, pr_roots, pl_roots, cte) {
   
-  pr_coef <- c(0, poly_from_roots(pr_roots)) 
-  pl_coef <- poly_from_roots(pl_roots) 
+  pr_coef <- c(0, poly.from.roots(pr_roots)) 
+  pl_coef <- poly.from.roots(pl_roots) 
   factor_pr_coef <- pr_coef
   pr_plus_pl_coef <- factor_pr_coef + cte/factor * pl_coef
   res <- gsignal::residue(factor_pr_coef, pr_plus_pl_coef)
@@ -190,12 +190,12 @@ my.fractional.operators.frac <- function(L, beta, C, scale.factor, m = 1, time_s
     return(list(Ci = Ci, C = C, LCi = LCi, L = L, m = m, beta = beta, LHS = C + time_step * L))
   } else {
     roots <- my.get.roots(m, beta)
-    poles_rs_k <- compute_partial_fraction_param(roots$factor, roots$rc, roots$rb, time_step)
+    poles_rs_k <- compute.partial.fraction.param(roots$factor, roots$rc, roots$rb, time_step)
 
-    partial.fraction.factors <- list()
-    for (i in 1:(m+1)) {partial.fraction.factors[[i]] <- (LCi - poles_rs_k$p[i] * I)/poles_rs_k$r[i]}
-    partial.fraction.factors[[m+2]] <- ifelse(is.null(poles_rs_k$k), 0, poles_rs_k$k) * I
-    return(list(Ci = Ci, C = C, LCi = LCi, L = L, m = m, beta = beta, partial.fraction.factors = partial.fraction.factors))
+    partial_fraction_terms <- list()
+    for (i in 1:(m+1)) {partial_fraction_terms[[i]] <- (LCi - poles_rs_k$p[i] * I)/poles_rs_k$r[i]}
+    partial_fraction_terms[[m+2]] <- ifelse(is.null(poles_rs_k$k), 0, poles_rs_k$k) * I
+    return(list(Ci = Ci, C = C, LCi = LCi, L = L, m = m, beta = beta, partial_fraction_terms = partial_fraction_terms))
   }
 }
 # Function to solve the iteration
@@ -207,18 +207,18 @@ my.solver.frac <- function(obj, v){
   if (beta == 1){
     return(solve(obj$LHS, v))
   } else {
-    partial.fraction.factors <- obj$partial.fraction.factors
-    output <- partial.fraction.factors[[m+2]] %*% v
-    for (i in 1:(m+1)) {output <- output + solve(partial.fraction.factors[[i]], v)}
+    partial_fraction_terms <- obj$partial_fraction_terms
+    output <- partial_fraction_terms[[m+2]] %*% v
+    for (i in 1:(m+1)) {output <- output + solve(partial_fraction_terms[[i]], v)}
     return(Ci %*% output)
   }
 }
 # Function to build a tadpole graph and create a mesh
-gets_graph_tadpole <- function(h){
+gets.graph.tadpole <- function(h){
   edge1 <- rbind(c(0,0),c(1,0))
   theta <- seq(from=-pi,to=pi,length.out = 10000)
   edge2 <- cbind(1+1/pi+cos(theta)/pi,sin(theta)/pi)
-  edges = list(edge1, edge2)
+  edges <- list(edge1, edge2)
   graph <- metric_graph$new(edges = edges)
   graph$set_manual_edge_lengths(edge_lengths = c(1,2))
   graph$build_mesh(h = h)
@@ -253,10 +253,129 @@ if(k==0){
 return(f)
 }
 # Function to order the vertices for plotting
-order_to_plot <- function(v, graph){
+plotting.order <- function(v, graph){
   edge_number <- graph$mesh$VtE[, 1]
   pos <- sum(edge_number == 1)+1
   return(c(v[1], v[3:pos], v[2], v[(pos+1):length(v)], v[2]))
+}
+# Function to plot in 3D
+graph.plotter.3d <- function(graph, U_true, U_approx1, U_approx2, time_seq, time_step){
+  x <- graph$mesh$V[, 1]
+  y <- graph$mesh$V[, 2]
+  x <- plotting.order(x, graph)
+  y <- plotting.order(y, graph)
+  weights <- graph$mesh$weights
+  
+  cumsum1 <- sqrt(time_step * cumsum(t(weights) %*% (U_true - U_approx1)^2))
+  cumsum2 <- sqrt(time_step * cumsum(t(weights) %*%(U_true - U_approx2)^2))
+  cumsum3 <- sqrt(time_step * cumsum(t(weights) %*% (U_approx1 - U_approx2)^2))
+  
+  U_true <- apply(U_true, 2, plotting.order, graph = graph)
+  U_approx1 <- apply(U_approx1, 2, plotting.order, graph = graph)
+  U_approx2 <- apply(U_approx2, 2, plotting.order, graph = graph)
+  
+  plot_data <- data.frame(
+  x = rep(x, times = ncol(U_true)),
+  y = rep(y, times = ncol(U_true)),
+  z_true = as.vector(U_true),
+  z_approx1 = as.vector(U_approx1),
+  z_approx2 = as.vector(U_approx2),
+  frame = rep(time_seq, each = length(x)))
+  
+  x_range <- range(x)
+  y_range <- range(y)
+  z_range <- range(c(U_true, U_approx1, U_approx2))
+  
+  p <- plot_ly(plot_data, frame = ~frame) %>%
+  add_trace(x = ~x, y = ~y, z = ~z_true, type = "scatter3d", mode = "lines", name = "T",
+            line = list(color = "green", width = 2)) %>%
+  add_trace(x = ~x, y = ~y, z = ~z_approx1, type = "scatter3d", mode = "lines", name = "A1",
+            line = list(color = "red", width = 2)) %>%
+  add_trace(x = ~x, y = ~y, z = ~z_approx2, type = "scatter3d", mode = "lines", name = "A2", 
+            line = list(color = "blue", width = 2)) %>%
+  layout(
+    scene = list(
+      xaxis = list(title = "x", range = x_range),
+      yaxis = list(title = "y", range = y_range),
+      zaxis = list(title = "z", range = z_range),
+      aspectratio = list(x = 2.4, y = 1.2, z = 1.2),
+      camera = list(eye = list(x = 1.5, y = 1.5, z = 1), center = list(x = 0, y = 0, z = 0))),
+    updatemenus = list(list(type = "buttons", showactive = FALSE,
+                            buttons = list(
+          list(label = "Play", method = "animate",
+               args = list(NULL, list(frame = list(duration = 100, redraw = TRUE), fromcurrent = TRUE))),
+          list(label = "Pause", method = "animate",
+               args = list(NULL, list(mode = "immediate", frame = list(duration = 0), redraw = FALSE)))
+        )
+      )
+    ),
+    title = "Time: 0"
+  ) %>% plotly_build()
+  for (i in seq_along(p$x$frames)) {
+    t <- time_seq[i]
+    err1 <- signif(cumsum1[i], 4)
+    err2 <- signif(cumsum2[i], 4)
+    err3 <- signif(cumsum3[i], 4)
+    p$x$frames[[i]]$layout <- list(title = paste0("Time: ", t, " | cum E=T-A1: ", err1, " | cum E=T-A2: ", err2, " | cum E=A1-A2: ", err3))
+  }
+  return(p)
+}
+# Function to plot the error at each time step
+error.at.each.time.plotter <- function(graph, U_true, U_approx1, U_approx2, time_seq, time_step) {
+  weights <- graph$mesh$weights
+  error_at_each_time1 <- t(weights) %*% (U_true - U_approx1)^2
+  error_at_each_time2 <- t(weights) %*% (U_true - U_approx2)^2
+  error_between_both_approx <- t(weights) %*% (U_approx1 - U_approx2)^2
+  
+  error1 <- sqrt(as.double(t(weights) %*% (U_true - U_approx1)^2 %*% rep(time_step, ncol(U_true))))
+  error2 <- sqrt(as.double(t(weights) %*% (U_true - U_approx2)^2 %*% rep(time_step, ncol(U_true))))
+  errorb <- sqrt(as.double(t(weights) %*% (U_approx1 - U_approx2)^2 %*% rep(time_step, ncol(U_true))))
+  
+  fig <- plot_ly() %>% 
+  add_trace(
+  x = ~time_seq, y = ~error_at_each_time1, type = 'scatter', mode = 'lines+markers',
+  line = list(color = 'red', width = 2),
+  marker = list(color = 'red', size = 4),
+  name = paste0("E=T-A1: ", sprintf("%.3e", error1))
+) %>% 
+  add_trace(
+  x = ~time_seq, y = ~error_at_each_time2, type = 'scatter', mode = 'lines+markers',
+  line = list(color = 'blue', width = 2, dash = "dot"),
+  marker = list(color = 'blue', size = 4),
+  name = paste0("E=T-A2: ", sprintf("%.3e", error2))
+) %>% 
+  add_trace(
+  x = ~time_seq, y = ~error_between_both_approx, type = 'scatter', mode = 'lines+markers',
+  line = list(color = 'orange', width = 2),
+  marker = list(color = 'orange', size = 4),
+  name = paste0("E=A1-A2: ", sprintf("%.3e", errorb))
+) %>% 
+  layout(
+  title = "Error at Each Time Step",
+  xaxis = list(title = "Error at Each Time Step"),
+  yaxis = list(title = "Error"),
+  legend = list(x = 0.1, y = 0.9)
+)
+  return(fig)
+}
+# Function to compute the eigenvalues and eigenfunctions
+gets.eigen.params <- function(N_finite = 4, kappa = 1, alpha = 0.5, graph){
+  EIGENVAL_ALPHA <- NULL
+  EIGENFUN <- NULL
+  for (j in 0:N_finite) {
+      lambda_j_alpha <- (kappa^2 + (j*pi/2)^2)^(alpha/2)
+      e_j <- tadpole.eig(j,graph)$phi
+      EIGENVAL_ALPHA <- c(EIGENVAL_ALPHA, lambda_j_alpha)         
+      EIGENFUN <- cbind(EIGENFUN, e_j)
+      if (j>0 && (j %% 2 == 0)) {
+        lambda_j_alpha <- (kappa^2 + (j*pi/2)^2)^(alpha/2)
+        e_j <- tadpole.eig(j,graph)$psi
+        EIGENVAL_ALPHA <- c(EIGENVAL_ALPHA, lambda_j_alpha)         
+        EIGENFUN <- cbind(EIGENFUN, e_j)
+      }
+  }
+  return(list(EIGENVAL_ALPHA = EIGENVAL_ALPHA,
+              EIGENFUN = EIGENFUN))
 }
 ```
 
@@ -283,117 +402,88 @@ If we choose $w_j$ and $v_j$ and take the initial condition and the right hand s
     u_0(s) = \sum_{j=0}^{N} w_j e_j(s) \text{ and so } \left(u_0, e_j\right)_{L_2(\Gamma)} = w_j,
 \end{equation}
 \begin{equation}
-   \text{In matrix notation: } \quad\boldsymbol{U}_0 = \boldsymbol{E}^N_h\boldsymbol{c}, \quad  \boldsymbol{E}^N_h = \left[e_0, e_1, \ldots, e_{N}\right], \quad \boldsymbol{c} = \left[w_0, w_1, \ldots, w_{N}\right]^\top,
+   \text{In matrix notation: } \quad\boldsymbol{U}_0 = \boldsymbol{E}_h\boldsymbol{c}, \quad  \boldsymbol{E}_h = \left[e_0, e_1, \ldots, e_{N}\right], \quad \boldsymbol{w} = \left[w_0, w_1, \ldots, w_{N}\right]^\top,
+\end{equation}
+\begin{equation}
+   \text{In } \texttt{R}: \texttt{U_0 <- EIGENFUN %*% coeff_U_0}
 \end{equation}
 and
 \begin{equation}
-    f(s,t) = \sum_{j=0}^{M} v_j e^{-\lambda^{\alpha/2}_jt} e_j(s) \text{ and so } \left(f(\cdot,r), e_j\right)_{L_2(\Gamma)} = v_j e^{-\lambda^{\alpha/2}_jr},
+    f(s,t) = \sum_{j=0}^{N} v_j e^{-\lambda^{\alpha/2}_jt} e_j(s) \text{ and so } \left(f(\cdot,r), e_j\right)_{L_2(\Gamma)} = v_j e^{-\lambda^{\alpha/2}_jr},
 \end{equation}
 \begin{equation}
-   \text{In matrix notation: } \quad\boldsymbol{f} = \boldsymbol{E}^M_h \boldsymbol{V}, \quad \boldsymbol{V}_{ji} = v_je^{-\lambda^{\alpha/2}_jt_i}
+   \text{In matrix notation: } \quad\boldsymbol{f} = \boldsymbol{E}_h \boldsymbol{V}, \quad \boldsymbol{V}_{ji} = v_je^{-\lambda^{\alpha/2}_jt_i}
 \end{equation}
-
+\begin{equation}
+   \text{In } \texttt{R}: \texttt{FF <- EIGENFUN %*% (coeff_FF * exp(-outer(EIGENVAL_ALPHA, time_seq)))}
+\end{equation}
 then the solution is given by
 \begin{align}
-        u(s,t) &= \displaystyle\sum_{j=0}^{N}w_je^{-\lambda^{\alpha/2}_jt}e_j(s) + \int_0^t \displaystyle\sum_{j=0}^Me^{-\lambda^{\alpha/2}_j(t-r)}v_j e^{-\lambda^{\alpha/2}_jr}e_j(s)dr\\
-        &= \displaystyle\sum_{j=0}^{N}w_je^{-\lambda^{\alpha/2}_jt}e_j(s) + t \displaystyle\sum_{j=0}^Mv_j e^{-\lambda^{\alpha/2}_jt}e_j(s)
+        u(s,t) &= \displaystyle\sum_{j=0}^{N}w_je^{-\lambda^{\alpha/2}_jt}e_j(s) + \int_0^t \displaystyle\sum_{j=0}^Ne^{-\lambda^{\alpha/2}_j(t-r)}v_j e^{-\lambda^{\alpha/2}_jr}e_j(s)dr\\
+        &= \displaystyle\sum_{j=0}^{N}w_je^{-\lambda^{\alpha/2}_jt}e_j(s) + t \displaystyle\sum_{j=0}^Nv_j e^{-\lambda^{\alpha/2}_jt}e_j(s)\\
+        &= \displaystyle\sum_{j=0}^{N}w_je^{-\lambda^{\alpha/2}_jt}e_j(s) + tf(s,t)\\
+        &= \displaystyle\sum_{j=0}^{N}(w_j+tv_j)e^{-\lambda^{\alpha/2}_jt}e_j(s) 
 \end{align}
 
 \begin{equation}
-   \text{In matrix notation: } \quad\boldsymbol{U} =\boldsymbol{E}^N_h \boldsymbol{W} + \boldsymbol{f}\boldsymbol{t}, \quad \boldsymbol{W}_{ji} = w_je^{-\lambda^{\alpha/2}_jt_i},\quad \boldsymbol{t} = \left[t_0, t_1, \ldots, t_{K}\right]^\top
+   \text{In matrix notation: } \quad\boldsymbol{U} =\boldsymbol{E}_h \boldsymbol{W} + (\boldsymbol{t}\boldsymbol{f}^\top)^\top, \quad \boldsymbol{W}_{ji} = w_je^{-\lambda^{\alpha/2}_jt_i},\quad \boldsymbol{t} = \left[t_0, t_1, \ldots, t_{K}\right]^\top
 \end{equation}
-
+\begin{equation}
+   \text{In } \texttt{R}: \texttt{U_true <- EIGENFUN %*% (coeff_U_0 * exp(-outer(EIGENVAL_ALPHA, time_seq)))+ t(time_seq * t(FF))}
+\end{equation}
 
 ```{r}
 h <- 0.01
-graph <- gets_graph_tadpole(h = h)
 T_final <- 2
 time_step <- 0.01
-time_seq <- seq(0, T_final, by = time_step)
-# Compute the FEM matrices
-graph$compute_fem()
-G <- graph$mesh$G
-C <- graph$mesh$C
-I <- Matrix::Diagonal(nrow(C))
-x <- graph$mesh$V[, 1]
-y <- graph$mesh$V[, 2]
-weights <- graph$mesh$weights
-
-
 kappa <- 1
 alpha <- 0.5 # from 0.5 to 2
 m = 1
 beta <- alpha/2
-L <- kappa^2*C + G
-
-
-
-# Parameters to construct U_0
-N_finite <- 4 # choose an even number
+N_finite = 4 # choose even
 adjusted_N_finite <- N_finite + N_finite/2 + 1
-EIGENVAL_ALPHA <- NULL
-EIGENFUN <- NULL   
-INDEX <- NULL
-PHI_OR_PSI <- NULL
-for (j in 0:N_finite) {
-    lambda_j_alpha <- (kappa^2 + (j*pi/2)^2)^(alpha/2)
-    e_j <- tadpole.eig(j,graph)$phi
-    EIGENVAL_ALPHA <- c(EIGENVAL_ALPHA, lambda_j_alpha)         
-    EIGENFUN <- cbind(EIGENFUN, e_j)   
-    INDEX <- c(INDEX, j)
-    PHI_OR_PSI <- c(PHI_OR_PSI, "phi")
-    if (j>0 && (j %% 2 == 0)) {
-      lambda_j_alpha <- (kappa^2 + (j*pi/2)^2)^(alpha/2)
-      e_j <- tadpole.eig(j,graph)$psi
-      EIGENVAL_ALPHA <- c(EIGENVAL_ALPHA, lambda_j_alpha)         
-      EIGENFUN <- cbind(EIGENFUN, e_j)   
-      INDEX <- c(INDEX, j)
-      PHI_OR_PSI <- c(PHI_OR_PSI, "psi")
-    }
-}
+# Coefficients for u_0 and f
+coeff_U_0 <- 50*(1:adjusted_N_finite)^-1
+coeff_U_0[-5] <- 0
+coeff_FF <- rep(0, adjusted_N_finite)
+coeff_FF[7] <- 10
 
-# Building the initial condition as \sum coeff_j EIGENFUN_j
-coeff <- 50*(1:length(EIGENVAL_ALPHA))^-1
-coeff[-5] <- 0
-U_0 <- EIGENFUN %*% coeff
 
-U_true <- EIGENFUN %*% outer(1:length(EIGENVAL_ALPHA), 
-                             1:length(time_seq), 
-                             function(i, j) coeff[i] * exp(-EIGENVAL_ALPHA[i] * time_seq[j]))
+time_seq <- seq(0, T_final, by = time_step)
+graph <- gets.graph.tadpole(h = h)
+graph$compute_fem()
+G <- graph$mesh$G
+C <- graph$mesh$C
+L <- kappa^2*C + G
+I <- Matrix::Diagonal(nrow(C))
 
-c_k <- 10
-what_eigenfunction_for_ff <- 7
-ff <- function(t){
-  return(c_k*EIGENFUN[,what_eigenfunction_for_ff]*exp(-t*EIGENVAL_ALPHA[what_eigenfunction_for_ff]))
-}
+eigen_params <- gets.eigen.params(N_finite = N_finite, kappa = kappa, alpha = alpha, graph = graph)
+EIGENVAL_ALPHA <- eigen_params$EIGENVAL_ALPHA
+EIGENFUN <- eigen_params$EIGENFUN
 
-FF_true <- matrix(NA, nrow = length(x), ncol = length(time_seq))
-FF_sol_true <- matrix(NA, nrow = length(x), ncol = length(time_seq))
-for (k in 1:length(time_seq)) {
-  FF_true[, k] <- ff(time_seq[k]) # this is the right hand side function
-  FF_sol_true[, k] <- time_seq[k]*FF_true[, k] # this is the second term in the solution
-}
 
-U_true <- U_true + FF_sol_true
+U_0 <- EIGENFUN %*% coeff_U_0
 
-graph_to_approx_int <- gets_graph_tadpole(h = 0.001)
-loc_finer <- graph_to_approx_int$get_mesh_locations()
-A <- graph$fem_basis(loc_finer)
-graph_to_approx_int$compute_fem()
-C_finer <- graph_to_approx_int$mesh$C
-EIGENFUN_FOR_FF <- tadpole.eig(INDEX[what_eigenfunction_for_ff], graph_to_approx_int)
+U_true <- EIGENFUN %*% 
+  outer(1:length(coeff_U_0), 
+        1:length(time_seq), 
+        function(i, j) (coeff_U_0[i] + coeff_FF[i]*time_seq[j]) * exp(-EIGENVAL_ALPHA[i] * time_seq[j]))
 
-if (PHI_OR_PSI[what_eigenfunction_for_ff] == "phi"){
-  eigenfun_for_ff <- EIGENFUN_FOR_FF$phi
-} else if (PHI_OR_PSI[what_eigenfunction_for_ff] == "psi"){
-  eigenfun_for_ff <- EIGENFUN_FOR_FF$psi
-}
+overkill_graph <- gets.graph.tadpole(h = 0.001)
+overkill_graph$compute_fem()
+overkill_EIGENFUN <- gets.eigen.params(N_finite = N_finite, kappa = kappa, alpha = alpha, graph = overkill_graph)$EIGENFUN
 
-int_basis_eigen <- as.vector(t(as.matrix(eigenfun_for_ff)) %*% C_finer %*% A) 
-COEF <- c_k*exp(-time_seq*EIGENVAL_ALPHA[what_eigenfunction_for_ff])
-FF_approx <- int_basis_eigen %*% t(COEF)
+
+INT_BASIS_EIGEN <- t(overkill_EIGENFUN) %*% 
+  overkill_graph$mesh$C %*% 
+  graph$fem_basis(overkill_graph$get_mesh_locations())
+
+
+FF_approx <- t(INT_BASIS_EIGEN) %*% 
+  outer(1:length(coeff_FF), 
+        1:length(time_seq), 
+        function(i, j) coeff_FF[i] * exp(-EIGENVAL_ALPHA[i] * time_seq[j]))
 ```
-
 
 
 
@@ -403,7 +493,7 @@ FF_approx <- int_basis_eigen %*% t(COEF)
 ```
 {r}
 coarse_h <- 0.1
-coarse_graph <- gets_graph_tadpole(h = coarse_h)
+coarse_graph <- gets.graph.tadpole(h = coarse_h)
 coarse_A <- coarse_graph$fem_basis(graph$get_mesh_locations())
 coarse_time_step <- 0.1
 coarse_time_seq <- seq(0, T_final, by = coarse_time_step)
@@ -427,7 +517,7 @@ coarse_U_0 <- solve(t(coarse_A) %*% coarse_A, t(coarse_A) %*% U_0)
 coarse_x <- coarse_order_to_plot(coarse_x)
 coarse_y <- coarse_order_to_plot(coarse_y)
 
-plot_ly(x = ~order_to_plot(x), y = ~order_to_plot(y), z = ~apply(U_0, 2,order_to_plot)[,1], type = 'scatter3d', mode = 'lines')
+plot_ly(x = ~plotting.order(x), y = ~plotting.order(y), z = ~apply(U_0, 2,plotting.order)[,1], type = 'scatter3d', mode = 'lines')
 plot_ly(x = ~coarse_x, y = ~coarse_y, z = ~apply(coarse_U_0, 2, coarse_order_to_plot)[,1], type = 'scatter3d', mode = 'lines')
 ```
 
@@ -468,217 +558,14 @@ for (k in 1:(length(time_seq) - 1)) {
 ```{r}
 #U_approx2 <- U_approx1
 U_approx1 <- U_approx2
+error.at.each.time.plotter(graph, U_true, U_approx1, U_approx2, time_seq, time_step)
 
 
-mean_w <- function(v){return(mean(v*weights))}
+graph.plotter.3d(graph, U_true, U_approx1, U_approx2, time_seq, time_step)
 
-max_error_at_each_time1 <- apply((U_true - U_approx1)^2, 2, mean)
-max_error_at_each_time2 <- apply((U_true - U_approx2)^2, 2, mean)
-max_error_between_both_approx <- apply((U_approx1 - U_approx2)^2, 2, mean)
+FF <- EIGENFUN %*% (coeff_FF * exp(-outer(EIGENVAL_ALPHA, time_seq)))
+FF_true <- t(time_seq * t(FF))
+graph.plotter.3d(graph, FF, FF_true, FF_approx, time_seq, time_step)
 
-error1 <- sqrt(time_step * sum(max_error_at_each_time1))
-error2 <- sqrt(time_step * sum(max_error_at_each_time2))
-errorb <- sqrt(time_step * sum(max_error_between_both_approx))
-
-
-x <- order_to_plot(x, graph)
-y <- order_to_plot(y, graph)
-U_true <- apply(U_true, 2, order_to_plot, graph = graph)
-U_approx1 <- apply(U_approx1, 2, order_to_plot, graph = graph)
-U_approx2 <- apply(U_approx2, 2, order_to_plot, graph = graph)
-
-# Create interactive plot
-fig <- plot_ly()
-
-# Add first line (max_error_at_each_time1)
-fig <- fig %>% add_trace(
-  x = ~time_seq, y = ~max_error_at_each_time1, type = 'scatter', mode = 'lines+markers',
-  line = list(color = 'red', width = 2),
-  marker = list(color = 'red', size = 4),
-  name = paste0("Error  True and Approx 1: ", sprintf("%.3e", error1))
-)
-
-# Add second line (max_error_at_each_time2)
-fig <- fig %>% add_trace(
-  x = ~time_seq, y = ~max_error_at_each_time2, type = 'scatter', mode = 'lines+markers',
-  line = list(color = 'blue', width = 2, dash = "dot"),
-  marker = list(color = 'blue', size = 4),
-  name = paste0("Error  True and Approx 2: ", sprintf("%.3e", error2))
-)
-
-# Add third line (max_error_between_both_approx)
-
-fig <- fig %>% add_trace(
-  x = ~time_seq, y = ~max_error_between_both_approx, type = 'scatter', mode = 'lines+markers',
-  line = list(color = 'orange', width = 2),
-  marker = list(color = 'orange', size = 4),
-  name = paste0("Error Between Approximations: ", sprintf("%.3e", errorb))
-)
-
-# Layout
-fig <- fig %>% layout(
-  title = "Error at Each Time Step",
-  xaxis = list(title = "Time"),
-  yaxis = list(title = "Error"),
-  legend = list(x = 0.1, y = 0.9)
-)
-
-
-plot_data <- data.frame(
-  x = rep(x, times = ncol(U_true)),
-  y = rep(y, times = ncol(U_true)),
-  z_true = as.vector(U_true),
-  z_approx1 = as.vector(U_approx1),
-  z_approx2 = as.vector(U_approx2),
-  frame = rep(time_seq, each = length(x))
-)
-
-# Compute axis limits
-x_range <- range(x)
-y_range <- range(y)
-z_range <- range(c(U_true, U_approx1, U_approx2))
-
-# Initial plot setup (first frame only)
-p <- plot_ly(plot_data, frame = ~frame) %>%
-  add_trace(
-    x = ~x, y = ~y, z = ~z_true,
-    type = "scatter3d", mode = "lines",
-    name = "True",
-    line = list(color = "green", width = 2)
-  ) %>%
-  add_trace(
-    x = ~x, y = ~y, z = ~z_approx1,
-    type = "scatter3d", mode = "lines",
-    name = "Approx 1",
-    line = list(color = "red", width = 2)
-  ) %>%
-  add_trace(
-    x = ~x, y = ~y, z = ~z_approx2,
-    type = "scatter3d", mode = "lines",
-    name = "Approx 2",
-    line = list(color = "blue", width = 2)
-  ) %>%
-  layout(
-    scene = list(
-      xaxis = list(title = "x", range = x_range),
-      yaxis = list(title = "y", range = y_range),
-      zaxis = list(title = "Value", range = z_range),
-      aspectratio = list(x = 2.4, y = 1.2, z = 1.2),
-           camera = list(
-      eye = list(x = 1.5, y = 1.5, z = 1),  # Adjust the viewpoint
-      center = list(x = 0, y = 0, z = 0))
-    ),
-    updatemenus = list(
-      list(
-        type = "buttons", showactive = FALSE,
-        buttons = list(
-          list(label = "Play", method = "animate",
-               args = list(NULL, list(frame = list(duration = 100, redraw = TRUE), fromcurrent = TRUE))),
-          list(label = "Pause", method = "animate",
-               args = list(NULL, list(mode = "immediate", frame = list(duration = 0), redraw = FALSE)))
-        )
-      )
-    ),
-    title = "Time: 0"
-  )
-
-# Convert to plotly object with frame info
-pb <- plotly_build(p)
-
-# Inject custom titles into each frame
-for (i in seq_along(pb$x$frames)) {
-  t <- time_seq[i]
-  err <- signif(max_error_between_both_approx[i], 4)
-  pb$x$frames[[i]]$layout <- list(title = paste0("Time: ", t, " | Error: ", err))
-}
 ```
 
-
-```{r}
-## This is to plot the right hand side alone
-
-FF_true <- apply(FF_true, 2, order_to_plot, graph = graph)
-FF_sol_true <- apply(FF_sol_true, 2, order_to_plot, graph = graph)
-FF_approx <- apply(FF_approx, 2, order_to_plot, graph = graph)
-
-plot_data <- data.frame(
-  x = rep(x, times = ncol(FF_true)),
-  y = rep(y, times = ncol(FF_true)),
-  ff_true = as.vector(FF_true),
-  ff_sol_true = as.vector(FF_sol_true),
-  ff_approx = as.vector(FF_approx),
-  frame = rep(time_seq, each = length(x))
-)
-
-# Compute axis limits
-x_range <- range(x)
-y_range <- range(y)
-z_range <- range(c(FF_true, FF_sol_true, FF_approx))
-
-# Initial plot setup (first frame only)
-p_ff <- plot_ly(plot_data, frame = ~frame) %>%
-  add_trace(
-    x = ~x, y = ~y, z = ~ff_true,
-    type = "scatter3d", mode = "lines",
-    name = "f(s,t)",
-    line = list(color = "green", width = 2)
-  ) %>%
-  add_trace(
-    x = ~x, y = ~y, z = ~ff_sol_true,
-    type = "scatter3d", mode = "lines",
-    name = "tf(s,t) = u(s,t)-SOL(u_0)",
-    line = list(color = "red", width = 2)
-  ) %>%
-  add_trace(
-    x = ~x, y = ~y, z = ~ff_approx,
-    type = "scatter3d", mode = "lines",
-    name = "F^k = (f^k, phi)",
-    line = list(color = "blue", width = 2)
-  ) %>%
-  layout(
-    scene = list(
-      xaxis = list(title = "x", range = x_range),
-      yaxis = list(title = "y", range = y_range),
-      zaxis = list(title = "Value", range = z_range),
-      aspectratio = list(x = 2.4, y = 1.2, z = 1.2),
-           camera = list(
-      eye = list(x = 1.5, y = 1.5, z = 1),  # Adjust the viewpoint
-      center = list(x = 0, y = 0, z = 0))
-    ),
-    updatemenus = list(
-      list(
-        type = "buttons", showactive = FALSE,
-        buttons = list(
-          list(label = "Play", method = "animate",
-               args = list(NULL, list(frame = list(duration = 100, redraw = TRUE), fromcurrent = TRUE))),
-          list(label = "Pause", method = "animate",
-               args = list(NULL, list(mode = "immediate", frame = list(duration = 0), redraw = FALSE)))
-        )
-      )
-    ),
-    title = "Time: 0"
-  )
-
-# Convert to plotly object with frame info
-pb_ff <- plotly_build(p_ff)
-
-# Inject custom titles into each frame
-for (i in seq_along(pb_ff$x$frames)) {
-  t <- time_seq[i]
-  pb_ff$x$frames[[i]]$layout <- list(title = paste0("Time: ", t))
-}
-```
-
-```{r}
-fig  # Display the plot
-```
-
-
-```{r, fig.height = 6, out.width = "100%", fig.cap = captioner("Caption")}
-pb
-```
-
-
-```{r, fig.height = 6, out.width = "100%", fig.cap = captioner("Caption")}
-pb_ff
-```
