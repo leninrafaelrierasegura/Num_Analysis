@@ -135,6 +135,8 @@ library(rSPDE)
 library(MetricGraph)
 library(grateful)
 
+library(ggplot2)
+library(reshape2)
 library(plotly)
 ```
 
@@ -187,9 +189,11 @@ my.fractional.operators.frac <- function(L, beta, C, scale.factor, m = 1, time_s
   L <- L / scale.factor 
   LCi <- L %*% Ci
   if(beta == 1){
+    L <- L * scale.factor^beta
     return(list(Ci = Ci, C = C, LCi = LCi, L = L, m = m, beta = beta, LHS = C + time_step * L))
   } else {
     roots <- my.get.roots(m, beta)
+    scaling <- scale.factor^beta
     poles_rs_k <- compute.partial.fraction.param(roots$factor, roots$rc, roots$rb, time_step)
 
     partial_fraction_terms <- list()
@@ -445,7 +449,7 @@ then the solution is given by
 ```{r}
 kappa <- 1
 alpha <- 0.5 # from 0.5 to 2
-m = 1
+m = 4
 beta <- alpha/2
 N_finite = 4 # choose even
 adjusted_N_finite <- N_finite + N_finite/2 + 1
@@ -495,7 +499,6 @@ for (i in 1:length(hs)) {
   A <- graph$fem_basis(overkill_graph$get_mesh_locations())
   for (j in 1:length(time_steps)) {
     time_step <- time_steps[j]
-    print(by_vector[j])
     coarse_indices <- seq(1, length(overkill_time_seq), by = by_vector[j])
     time_seq <- overkill_time_seq[coarse_indices]
     my_op_frac <- my.fractional.operators.frac(L, beta, C, scale.factor = kappa^2, m = m, time_step)
@@ -515,38 +518,29 @@ for (i in 1:length(hs)) {
 }
 ```
 
-
 ```{r}
-print(errors)
 graph.plotter.3d(overkill_graph, sliced_overkill_U_true, projected_U_approx, time_seq, time_step)
 ```
 
-```{r}
-library(ggplot2)
-library(reshape2)
-library(plotly)
+```{r, fig.align='center', fig.dim= c(10,10), fig.cap = captioner("Caption")}
+df <- melt(errors)
+colnames(df) <- c("h", "time_step", "Value")
 
+df$h <- factor(df$h, levels = unique(df$h), labels = hs)
+df$time_step <- factor(df$time_step, levels = unique(df$time_step), labels = time_steps)
 
-# Create matrix
-mat <- errors
-
-# Convert to data frame
-df <- melt(mat)
-colnames(df) <- c("Y", "X", "Value")
-
-# ggplot
-p <- ggplot(df, aes(x = X, y = Y, fill = Value, text = paste("Value:", round(Value, 2)))) +
-  geom_tile() +
+p <- ggplot(df, aes(x = time_step, y = h, fill = Value, text = paste("Value:", Value))) +
+  geom_tile(color = "black") +  # Add borders
+  geom_text(aes(label = round(Value, 8)), size = 3) +  # Add value labels
   scale_fill_gradient(low = "white", high = "red") +
   coord_fixed() +
   theme_minimal()
 
-p
-
-# Convert to interactive plot
 ggplotly(p, tooltip = "text")
 
-image(1:10, 1:10, t(mat)[, nrow(mat):1], col = heat.colors(100), xlab = "", ylab = "")
 
+```
+```{r}
+print(errors)
 ```
 
