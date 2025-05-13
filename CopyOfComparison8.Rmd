@@ -171,12 +171,12 @@ poly.from.roots <- function(roots) {
   return(coef)
 }
 # Function to compute the partial fraction parameters
-compute.partial.fraction.param <- function(factor, pr_roots, pl_roots, cte) {
+compute.partial.fraction.param <- function(factor, pr_roots, pl_roots, time_step, scaling) {
   
   pr_coef <- c(0, poly.from.roots(pr_roots)) 
   pl_coef <- poly.from.roots(pl_roots) 
   factor_pr_coef <- pr_coef
-  pr_plus_pl_coef <- factor_pr_coef + cte/factor * pl_coef
+  pr_plus_pl_coef <- factor_pr_coef + ((scaling * time_step)/factor) * pl_coef
   res <- gsignal::residue(factor_pr_coef, pr_plus_pl_coef)
   return(list(r = res$r, p = res$p, k = res$k)) 
 }
@@ -192,9 +192,9 @@ my.fractional.operators.frac <- function(L, beta, C, scale.factor, m = 1, time_s
     L <- L * scale.factor^beta
     return(list(Ci = Ci, C = C, LCi = LCi, L = L, m = m, beta = beta, LHS = C + time_step * L))
   } else {
-    roots <- my.get.roots(m, beta)
     scaling <- scale.factor^beta
-    poles_rs_k <- compute.partial.fraction.param(roots$factor, roots$rc, roots$rb, time_step)
+    roots <- my.get.roots(m, beta)
+    poles_rs_k <- compute.partial.fraction.param(roots$factor, roots$rc, roots$rb, time_step, scaling)
 
     partial_fraction_terms <- list()
     for (i in 1:(m+1)) {partial_fraction_terms[[i]] <- (LCi - poles_rs_k$p[i] * I)/poles_rs_k$r[i]}
@@ -447,9 +447,9 @@ then the solution is given by
 \end{equation}
 
 ```{r}
-kappa <- 1
+kappa <- 15
 alpha <- 0.5 # from 0.5 to 2
-m = 4
+m = 1
 beta <- alpha/2
 N_finite = 4 # choose even
 adjusted_N_finite <- N_finite + N_finite/2 + 1
@@ -460,11 +460,11 @@ coeff_FF <- rep(0, adjusted_N_finite)
 coeff_FF[7] <- 10
 T_final <- 2
 
-overkill_time_power <- 9
-overkill_h_power <- 9
-
-time_steps <- 0.1 * 2^-c(overkill_time_power:0)
-hs <- 0.1 * 2^-c(overkill_h_power:0)
+overkill_time_power <- 10
+# overkill_h_power <- 10
+TIME_POWERS <- overkill_time_power:0
+time_steps <- 0.1 * 2^-TIME_POWERS
+hs <- sqrt(time_steps) # 0.1 * 2^-c(overkill_h_power:0)
 
 overkill_time_step <- time_steps[1]
 overkill_h <- hs[1]
@@ -483,7 +483,7 @@ overkill_U_true <- overkill_EIGENFUN %*%
   outer(1:length(coeff_U_0), 1:length(overkill_time_seq), 
         function(i, j) (coeff_U_0[i] + coeff_FF[i] * overkill_time_seq[j]) * exp(-EIGENVAL_ALPHA[i] * overkill_time_seq[j]))
 
-by_vector <- 2^c(0:overkill_time_power)
+by_vector <- 2^rev(TIME_POWERS)
 
 errors <- matrix(NA, nrow = length(hs), ncol = length(time_steps))
 for (i in 1:length(hs)) {

@@ -92,7 +92,7 @@ knitr::opts_chunk$set(
   # Include both R code and its results in output
   include = TRUE,     
   # Evaluate R code chunks
-  eval = FALSE,       
+  eval = TRUE,       
   # Enable caching of R code chunks for faster rendering
   cache = FALSE,      
   # Align figures in the center of the output
@@ -450,7 +450,7 @@ where $\texttt{factor} = \dfrac{c_m}{b_{m+1}}$. Observe that
 \begin{equation}
 P_r^T = \prod_{i=1}^m \left(I-r_{1i}\dfrac{LC^{-1}}{\kappa^2}\right)\quad\text{and}\quad P_\ell^T = \dfrac{\kappa^{2\beta}}{\texttt{factor}}\prod_{j=1}^{m+1} \left(I-r_{2j}\dfrac{LC^{-1}}{\kappa^2}\right)\cdot C
 \end{equation}
-since $L$ and $C^{-1}$ are symmetric and the factors in the product commute. Replacing these two in our scheme we get
+since $C$,  $L$ and $C^{-1}$ are symmetric and the factors in the product commute. Replacing these two in our scheme we get
 \begin{equation}
 \left(\prod_{i=1}^m \left(I-r_{1i}\dfrac{LC^{-1}}{\kappa^2}\right)+\dfrac{\tau \kappa^{2\beta}}{\texttt{factor}}\prod_{j=1}^{m+1} \left(I-r_{2j}\dfrac{LC^{-1}}{\kappa^2}\right)\right)CU^{k+1} = \prod_{i=1}^m \left(I-r_{1i}\dfrac{LC^{-1}}{\kappa^2}\right)\cdot (CU^k+\tau F^{k+1})
 \end{equation}
@@ -477,10 +477,10 @@ U^{k+1} = C^{-1}\left(\sum_{k=1}^{m+1} a_k\left( \dfrac{LC^{-1}}{\kappa^2}-p_kI\
 \end{equation}
 
 ```{r}
-h <- 0.01
 T_final <- 2
-time_step <- 0.01
-kappa <- 1
+time_step <- 0.1 * 2^-10 # 0.01
+h <- sqrt(time_step) # 0.01
+kappa <- 15
 alpha <- 0.5 # from 0.5 to 2
 m = 1
 beta <- alpha/2
@@ -534,8 +534,52 @@ FF_approx <- t(INT_BASIS_EIGEN) %*%
 # Solving it
 
 
+```{r}
+op <- fractional.operators(L, beta, C, scale.factor = kappa^2, m = m)
+Pl <- op$Pl
+Pr <- op$Pr
+Ci <- op$Ci
+C <- op$C
 
+Pr.apply.mult <- function(v){return(Pr.mult(op, v))}
+Pl.apply.solve <- function(v){return(Pl.solve(op, v))}
+PliC <- apply(C, 2, Pl.apply.solve) # Pl^-1C
+# Precompute the LHS1 matrix
+aux <- apply(PliC, 2, Pr.apply.mult) #PrPl^-1C
+LHS <- aux + time_step * Matrix::Diagonal(nrow(C)) 
 
+# Initialize U matrix to store solution at each time step
+U_approx1 <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
+U_approx1[, 1] <- U_0
+
+# Time-stepping loop
+for (k in 1:(length(time_seq) - 1)) {
+  # Compute the right-hand side for the second equation
+  RHS <- aux %*% U_approx1[, k] + time_step * Pr.mult(op, Pl.solve(op, FF_approx[, k + 1]))
+  U_approx1[, k + 1] <- as.matrix(solve(LHS, RHS))
+}
+```
+
+```
+{r}
+op <- fractional.operators(L, beta, C, scale.factor = kappa^2, m = m)
+Pl <- op$Pl
+Pr <- op$Pr
+Ci <- op$Ci
+C <- op$C
+
+LHS <- t(Pr)%*% C + time_step * t(Pl)
+# Initialize U matrix to store solution at each time step
+U_approx1 <- matrix(NA, nrow = nrow(C), ncol = length(time_seq))
+U_approx1[, 1] <- U_0
+
+# Time-stepping loop
+for (k in 1:(length(time_seq) - 1)) {
+  # Compute the right-hand side for the second equation
+  RHS <- t(Pr)%*% ( C %*% U_approx1[, k] + time_step * FF_approx[, k + 1])
+  U_approx1[, k + 1] <- as.matrix(solve(LHS, RHS))
+}
+```
 
 
 ```{r}
@@ -555,7 +599,7 @@ for (k in 1:(length(time_seq) - 1)) {
 
 ```{r}
 #U_approx2 <- U_approx1
-U_approx1 <- U_approx2
+# U_approx1 <- U_approx2
 error.at.each.time.plotter(graph, U_true, U_approx1, U_approx2, time_seq, time_step)
 
 
