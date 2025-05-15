@@ -92,7 +92,7 @@ knitr::opts_chunk$set(
   # Include both R code and its results in output
   include = TRUE,     
   # Evaluate R code chunks
-  eval = TRUE,       
+  eval = FALSE,       
   # Enable caching of R code chunks for faster rendering
   cache = FALSE,      
   # Align figures in the center of the output
@@ -404,7 +404,7 @@ If we choose $w_j$ and $v_j$ and take the initial condition and the right hand s
     u_0(s) = \sum_{j=0}^{N} w_j e_j(s) \text{ and so } \left(u_0, e_j\right)_{L_2(\Gamma)} = w_j,
 \end{equation}
 \begin{equation}
-   \text{In matrix notation: } \quad\boldsymbol{U}_0 = \boldsymbol{E}_h\boldsymbol{c}, \quad  \boldsymbol{E}_h = \left[e_0, e_1, \ldots, e_{N}\right], \quad \boldsymbol{w} = \left[w_0, w_1, \ldots, w_{N}\right]^\top,
+   \text{In matrix notation: } \quad\boldsymbol{U}_0 = \boldsymbol{E}_h\boldsymbol{w}, \quad  \boldsymbol{E}_h = \left[e_0, e_1, \ldots, e_{N}\right], \quad \boldsymbol{w} = \left[w_0, w_1, \ldots, w_{N}\right]^\top,
 \end{equation}
 \begin{equation}
    \text{In } \texttt{R}: \texttt{U_0 <- EIGENFUN %*% coeff_U_0}
@@ -433,7 +433,13 @@ then the solution is given by
 \begin{equation}
    \text{In } \texttt{R}: \texttt{U_true <- EIGENFUN %*% (coeff_U_0 * exp(-outer(EIGENVAL_ALPHA, time_seq)))+ t(time_seq * t(FF))}
 \end{equation}
+or directly,
+\begin{equation}
+   \text{In } \texttt{R}: \texttt{U_true <- EIGENFUN %*% outer(1:length(coeff_U_0), 1:length(time_seq), function(i, j) (coeff_U_0[i] + coeff_FF[i]*time_seq[j]) * exp(-EIGENVAL_ALPHA[i] * time_seq[j]))}
+\end{equation}
 
+This is how matrix $\boldsymbol{F} = [F^0, \dots, F^K]$ is computed. This matrix has elements $\boldsymbol{F}_{ik} =(f(\cdot, t_k), \psi_i)_{L_2(\Gamma)}=\sum_{j=0}^Nv_je^{-\lambda^{\alpha/2}_jt_k}(e_j, \psi_i)_{L_2(\Gamma)}$
+        
 # Numerical solution
 
 From this, we arrive at the scheme
