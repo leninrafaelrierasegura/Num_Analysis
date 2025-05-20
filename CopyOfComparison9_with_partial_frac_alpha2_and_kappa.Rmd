@@ -279,22 +279,45 @@ graph.plotter.3d <- function(graph, U_true, U_approx1, U_approx2, time_seq, time
   plot_data <- data.frame(
   x = rep(x, times = ncol(U_true)),
   y = rep(y, times = ncol(U_true)),
+  the_graph = 0*as.vector(U_true),
   z_true = as.vector(U_true),
   z_approx1 = as.vector(U_approx1),
   z_approx2 = as.vector(U_approx2),
   frame = rep(time_seq, each = length(x)))
+  
+  # Create vertical segments from (x, y, 0) to each z-value per frame
+vertical_lines <- do.call(rbind, lapply(time_seq, function(t) {
+  idx <- which(plot_data$frame == t)
+  data.frame(
+    x = rep(plot_data$x[idx], each = 3),
+    y = rep(plot_data$y[idx], each = 3),
+    z = as.vector(t(cbind(0, plot_data$z_true[idx], NA))),  # add NA to break the line
+    frame = rep(t, each = length(idx) * 3)
+  )
+}))
+
   
   x_range <- range(x)
   y_range <- range(y)
   z_range <- range(c(U_true, U_approx1, U_approx2))
   
   p <- plot_ly(plot_data, frame = ~frame) %>%
+  add_trace(x = ~x, y = ~y, z = ~the_graph, type = "scatter3d", mode = "lines", name = "",
+            line = list(color = "black", width = 2)) %>%
   add_trace(x = ~x, y = ~y, z = ~z_true, type = "scatter3d", mode = "lines", name = "T",
             line = list(color = "green", width = 2)) %>%
   add_trace(x = ~x, y = ~y, z = ~z_approx1, type = "scatter3d", mode = "lines", name = "A1",
             line = list(color = "red", width = 2)) %>%
   add_trace(x = ~x, y = ~y, z = ~z_approx2, type = "scatter3d", mode = "lines", name = "A2", 
             line = list(color = "blue", width = 2)) %>%
+  add_trace(
+    data = vertical_lines,
+    x = ~x, y = ~y, z = ~z, frame = ~frame,
+    type = "scatter3d", mode = "lines",
+    line = list(color = "gray", width = 0.5),
+    name = "Vertical lines",
+    showlegend = FALSE
+  ) %>%
   layout(
     scene = list(
       xaxis = list(title = "x", range = x_range),
@@ -305,7 +328,7 @@ graph.plotter.3d <- function(graph, U_true, U_approx1, U_approx2, time_seq, time
     updatemenus = list(list(type = "buttons", showactive = FALSE,
                             buttons = list(
           list(label = "Play", method = "animate",
-               args = list(NULL, list(frame = list(duration = 100, redraw = TRUE), fromcurrent = TRUE))),
+               args = list(NULL, list(frame = list(duration = 2000 / length(time_seq), redraw = TRUE), fromcurrent = TRUE))),
           list(label = "Pause", method = "animate",
                args = list(NULL, list(mode = "immediate", frame = list(duration = 0), redraw = FALSE)))
         )
@@ -313,6 +336,7 @@ graph.plotter.3d <- function(graph, U_true, U_approx1, U_approx2, time_seq, time
     ),
     title = "Time: 0"
   ) %>% plotly_build()
+  
   for (i in seq_along(p$x$frames)) {
     t <- time_seq[i]
     err1 <- signif(cumsum1[i], 4)
@@ -478,9 +502,9 @@ U^{k+1} = C^{-1}\left(\sum_{k=1}^{m+1} a_k\left( \dfrac{LC^{-1}}{\kappa^2}-p_kI\
 
 ```{r}
 T_final <- 2
-time_step <- 0.1 * 2^-10 # 0.01
-h <- sqrt(time_step) # 0.01
-kappa <- 15
+time_step <- 0.01 #0.1 * 2^-10 # 0.01
+h <- 0.01 #sqrt(time_step) # 0.01
+kappa <- 1#15
 alpha <- 0.5 # from 0.5 to 2
 m = 1
 beta <- alpha/2
@@ -534,7 +558,8 @@ FF_approx <- t(INT_BASIS_EIGEN) %*%
 # Solving it
 
 
-```{r}
+```
+{r}
 op <- fractional.operators(L, beta, C, scale.factor = kappa^2, m = m)
 Pl <- op$Pl
 Pr <- op$Pr
@@ -599,7 +624,7 @@ for (k in 1:(length(time_seq) - 1)) {
 
 ```{r}
 #U_approx2 <- U_approx1
-# U_approx1 <- U_approx2
+U_approx1 <- U_approx2
 error.at.each.time.plotter(graph, U_true, U_approx1, U_approx2, time_seq, time_step)
 
 
