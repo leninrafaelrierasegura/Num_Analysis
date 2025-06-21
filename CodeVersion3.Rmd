@@ -805,6 +805,11 @@ coeff_U_0[-5] <- 0
 coeff_FF <- rep(0, adjusted_N_finite)
 coeff_FF[7] <- 10
 
+AAA = 1
+MU = 0.3
+NNN = 2
+OMEGA = pi
+THETA = pi
 
 time_seq <- seq(0, T_final, by = time_step)
 graph <- gets.graph.tadpole(h = h)
@@ -812,17 +817,10 @@ graph$compute_fem()
 G <- graph$mesh$G
 C <- graph$mesh$C
 L <- kappa^2*C + G
-I <- Matrix::Diagonal(nrow(C))
 
 eigen_params <- gets.eigen.params(N_finite = N_finite, kappa = kappa, alpha = alpha, graph = graph)
 EIGENVAL_ALPHA <- eigen_params$EIGENVAL_ALPHA
 EIGENFUN <- eigen_params$EIGENFUN
-
-AAA = 1
-MU = 0.3
-NNN = 2
-OMEGA = pi
-THETA = pi
 
 # g_linear(r = time_seq[j], A = AAA, lambda_j_alpha_half = EIGENVAL_ALPHA[i])
 # G_linear(t = time_seq[j], A = AAA)
@@ -835,8 +833,10 @@ THETA = pi
 # g_cos(r = time_seq[j], A = AAA, theta = THETA)
 # G_cos(t = time_seq[j], A = AAA, lambda_j_alpha_half = EIGENVAL_ALPHA[i], theta = THETA)
 
-U_0 <- EIGENFUN %*% coeff_U_0
 
+# Compute the initial condition
+U_0 <- EIGENFUN %*% coeff_U_0
+# Compute the true solution
 U_true <- EIGENFUN %*% 
   outer(1:length(coeff_U_0), 
         1:length(time_seq), 
@@ -845,14 +845,10 @@ U_true <- EIGENFUN %*%
 overkill_graph <- gets.graph.tadpole(h = 0.001)
 overkill_graph$compute_fem()
 overkill_EIGENFUN <- gets.eigen.params(N_finite = N_finite, kappa = kappa, alpha = alpha, graph = overkill_graph)$EIGENFUN
-
-
-INT_BASIS_EIGEN <- t(overkill_EIGENFUN) %*% 
-  overkill_graph$mesh$C %*% 
-  graph$fem_basis(overkill_graph$get_mesh_locations())
-
-
-FF_approx <- t(INT_BASIS_EIGEN) %*% 
+# Compute matrix F with columns F^k
+FF_approx <- t(graph$fem_basis(overkill_graph$get_mesh_locations())) %*%
+  overkill_graph$mesh$C %*%
+  overkill_EIGENFUN %*%
   outer(1:length(coeff_FF), 
         1:length(time_seq), 
         function(i, j) coeff_FF[i] * g_sin(r = time_seq[j], A = AAA, omega = OMEGA))
@@ -928,6 +924,7 @@ for (k in 1:(length(time_seq) - 1)) {
 #U_approx2 <- U_approx1
 U_approx1 <- U_approx2
 
+# Compute the true f
 FF <- EIGENFUN %*% outer(1:length(coeff_FF), 
                          1:length(time_seq), 
                          function(i, j) coeff_FF[i] * g_sin(r = time_seq[j], A = AAA, omega = OMEGA))
@@ -937,11 +934,8 @@ FF <- EIGENFUN %*% outer(1:length(coeff_FF),
 
 ```{r, fig.dim = c(12,6)}
 error.at.each.time.plotter(graph, U_true, U_approx1, U_approx2, time_seq, time_step)
-
 graph.plotter.3d(graph, U_true, U_approx1, U_approx2, time_seq, time_step)
-
 graph.plotter.3d(graph, FF, FF_approx, FF_approx, time_seq, time_step)
-
 ```
 
 
