@@ -224,7 +224,7 @@ gets.graph.tadpole <- function(h){
   theta <- seq(from=-pi,to=pi,length.out = 10000)
   edge2 <- cbind(1+1/pi+cos(theta)/pi,sin(theta)/pi)
   edges <- list(edge1, edge2)
-  graph <- metric_graph$new(edges = edges)
+  graph <- metric_graph$new(edges = edges, verbose = 0)
   graph$set_manual_edge_lengths(edge_lengths = c(1,2))
   graph$build_mesh(h = h)
   return(graph)
@@ -434,6 +434,48 @@ G_cos <- function(t, A, lambda_j_alpha_half, theta) {
   numerator <- exp(lambda_j_alpha_half * t) * (lambda_j_alpha_half * cos(theta * t) + theta * sin(theta * t)) - lambda_j_alpha_half
   return(A * numerator / denom)
 }
+construct_piecewise_projection <- function(projected_U_approx, time_seq, overkill_time_seq) {
+  projected_U_piecewise <- matrix(NA, nrow = nrow(projected_U_approx), ncol = length(overkill_time_seq))
+  
+  # Assign value at t = 0
+  projected_U_piecewise[, which(overkill_time_seq == 0)] <- projected_U_approx[, 1]
+  
+  # Assign values for intervals (t_{k-1}, t_k]
+  for (k in 2:length(time_seq)) {
+    idxs <- which(overkill_time_seq > time_seq[k - 1] & overkill_time_seq <= time_seq[k])
+    projected_U_piecewise[, idxs] <- projected_U_approx[, k]
+  }
+  
+  return(projected_U_piecewise)
+}
+loglog_line_equation <- function(x1, y1, slope) {
+  b <- log10(y1 / (x1 ^ slope))
+  
+  function(x) {
+    (x ^ slope) * (10 ^ b)
+  }
+}
+compute_guiding_lines <- function(h_vector, alpha_vector, errors_projected, theoretical_rate) {
+  guiding_lines <- matrix(NA, nrow = length(h_vector), ncol = length(alpha_vector))
+  
+  for (j in seq_along(alpha_vector)) {
+    guiding_lines_aux <- matrix(NA, nrow = length(h_vector), ncol = length(h_vector))
+    
+    for (k in seq_along(h_vector)) {
+      point_x1 <- h_vector[k]
+      point_y1 <- errors_projected[k, j]
+      slope <- theoretical_rate[j]
+      
+      line <- loglog_line_equation(x1 = point_x1, y1 = point_y1, slope = slope)
+      guiding_lines_aux[, k] <- line(h_vector)
+    }
+    
+    guiding_lines[, j] <- rowMeans(guiding_lines_aux)
+  }
+  
+  return(guiding_lines)
+}
+
 ```
 
 
@@ -493,9 +535,6 @@ then the solution is given by
 # Parameters
 T_final <- 2
 kappa <- 15
-alpha <- 0.5 # from 0.5 to 2
-m = 1
-beta <- alpha/2
 N_finite = 4 # choose even
 adjusted_N_finite <- N_finite + N_finite/2 + 1
 # Coefficients for u_0 and f
@@ -511,52 +550,58 @@ OMEGA = pi
 THETA = pi
 
 # Time step and mesh size
-POWERS <- 8:0
+POWERS <- seq(12, 5, by = -0.5)
+
 time_steps <- 0.1 * 2^-POWERS
-hs <- time_steps^(1/2)
-by_vector <- 2^rev(POWERS)
+h_vector <- time_steps^(1/2)
 
 # Overkill parameters
-overkill_time_step <- time_steps[1]
-overkill_h <- hs[1]
+overkill_time_step <- 0.1 * 2^-12
+overkill_h <- (0.1 * 2^-12)^(1/2)
 
 # Finest time and space mesh
-overkill_time_seq <- seq(0, T_final, by = overkill_time_step)
+overkill_time_seq <- seq(0, T_final, length.out = ((T_final - 0) / overkill_time_step + 1))
 overkill_graph <- gets.graph.tadpole(h = overkill_h)
 
 # Compute the weights on the finest mesh
 overkill_graph$compute_fem() # This is needed to compute the weights
 overkill_weights <- overkill_graph$mesh$weights
 
-# Compute the eigenvalues and eigenfunctions on the finest mesh
-overkill_eigen_params <- gets.eigen.params(N_finite = N_finite, kappa = kappa, alpha = alpha, graph = overkill_graph)
-EIGENVAL_ALPHA <- overkill_eigen_params$EIGENVAL_ALPHA # Eigenvalues (they are independent of the meshes)
-overkill_EIGENFUN <- overkill_eigen_params$EIGENFUN # Eigenfunctions on the finest mesh
-
-# Compute the true solution on the finest mesh
-overkill_U_true <- overkill_EIGENFUN %*% 
-  outer(1:length(coeff_U_0), 
-        1:length(overkill_time_seq), 
-        function(i, j) (coeff_U_0[i] + coeff_FF[i] * G_sin(t = overkill_time_seq[j], A = AAA, lambda_j_alpha_half = EIGENVAL_ALPHA[i], omega = OMEGA) ) * exp(-EIGENVAL_ALPHA[i] * overkill_time_seq[j]))
-
+m_values <- c()
+alpha_vector <- c(0.5, 1, 1.5, 2)
 # Create a matrix to store the errors
-errors_sliced <- matrix(NA, nrow = length(hs), ncol = length(time_steps))
-errors_projected <- matrix(NA, nrow = length(hs), ncol = length(time_steps))
-for (i in 1:length(hs)) {
-  h <- hs[i]
-  graph <- gets.graph.tadpole(h = h)
-  graph$compute_fem()
-  G <- graph$mesh$G
-  C <- graph$mesh$C
-  L <- kappa^2*C + G
-  eigen_params <- gets.eigen.params(N_finite = N_finite, kappa = kappa, alpha = alpha, graph = graph)
-  EIGENFUN <- eigen_params$EIGENFUN
-  U_0 <- EIGENFUN %*% coeff_U_0 # Compute U_0 on the current mesh
-  A <- graph$fem_basis(overkill_graph$get_mesh_locations())
-  for (j in 1:length(time_steps)) {
-    time_step <- time_steps[j]
-    coarse_indices <- seq(1, length(overkill_time_seq), by = by_vector[j]) # select the indices
-    time_seq <- overkill_time_seq[coarse_indices] # select the time sequence
+errors_projected <- matrix(NA, nrow = length(h_vector), ncol = length(alpha_vector))
+for (j in 1:length(alpha_vector)) {
+  alpha <- alpha_vector[j] # from 0.5 to 2
+  beta <- alpha / 2
+
+  # Compute the eigenvalues and eigenfunctions on the finest mesh
+  overkill_eigen_params <- gets.eigen.params(N_finite = N_finite, kappa = kappa, alpha = alpha, graph = overkill_graph)
+  EIGENVAL_ALPHA <- overkill_eigen_params$EIGENVAL_ALPHA # Eigenvalues (they are independent of the meshes)
+  overkill_EIGENFUN <- overkill_eigen_params$EIGENFUN # Eigenfunctions on the finest mesh
+  
+  # Compute the true solution on the finest mesh
+  overkill_U_true <- overkill_EIGENFUN %*% 
+    outer(1:length(coeff_U_0), 
+          1:length(overkill_time_seq), 
+          function(i, j) (coeff_U_0[i] + coeff_FF[i] * G_sin(t = overkill_time_seq[j], A = AAA, lambda_j_alpha_half = EIGENVAL_ALPHA[i], omega = OMEGA)) * exp(-EIGENVAL_ALPHA[i] * overkill_time_seq[j]))
+  
+  for (i in 1:length(h_vector)) {
+    h <- h_vector[i]
+    time_step <- h^alpha
+    m <- min(4, ceiling(25 * (log(h))^2 / (16 * pi^2 * (1 - alpha / 2))))
+    m_values <- c(m_values, m)
+    graph <- gets.graph.tadpole(h = h)
+    graph$compute_fem()
+    G <- graph$mesh$G
+    C <- graph$mesh$C
+    L <- kappa^2*C + G
+    eigen_params <- gets.eigen.params(N_finite = N_finite, kappa = kappa, alpha = alpha, graph = graph)
+    EIGENFUN <- eigen_params$EIGENFUN
+    U_0 <- EIGENFUN %*% coeff_U_0 # Compute U_0 on the current mesh
+    A <- graph$fem_basis(overkill_graph$get_mesh_locations())
+  
+    time_seq <- seq(0, T_final, length.out = ((T_final - 0) / time_step + 1))
     my_op_frac <- my.fractional.operators.frac(L, beta, C, scale.factor = kappa^2, m = m, time_step)
     INT_BASIS_EIGEN <- t(overkill_EIGENFUN) %*% overkill_graph$mesh$C %*% A
     # Compute matrix F with columns F^k
@@ -571,46 +616,30 @@ for (i in 1:length(hs)) {
       U_approx[, k + 1] <- as.matrix(my.solver.frac(my_op_frac, my_op_frac$C %*% U_approx[, k] + time_step * FF_approx[, k + 1]))
     }
     
-    sliced_overkill_U_true <- overkill_U_true[, coarse_indices]
     projected_U_approx <- A %*% U_approx
-    # Allocate matrix for the piecewise constant projection
-    projected_U_piecewise <- matrix(NA, nrow = nrow(projected_U_approx), ncol = length(overkill_time_seq))
-    # For t = 0
-    projected_U_piecewise[, which(overkill_time_seq == 0)] <- projected_U_approx[, 1]
-    # For t in (t_{k-1}, t_k]
-    for (k in 2:length(time_seq)) {
-      idxs <- which(overkill_time_seq > time_seq[k - 1] & overkill_time_seq <= time_seq[k])
-      projected_U_piecewise[, idxs] <- projected_U_approx[, k]
-    }
+    projected_U_piecewise <- construct_piecewise_projection(projected_U_approx, time_seq, overkill_time_seq)
     errors_projected[i,j] <- sqrt(as.double(t(overkill_weights) %*% (overkill_U_true - projected_U_piecewise)^2 %*% rep(overkill_time_step, length(overkill_time_seq))))
-    
-    errors_sliced[i,j] <- sqrt(as.double(t(overkill_weights) %*% (sliced_overkill_U_true - projected_U_approx)^2 %*% rep(time_step, length(time_seq))))
   }
 }
-```
-
-```{r}
-graph.plotter.3d(overkill_graph, sliced_overkill_U_true, projected_U_approx, time_seq, time_step)
-```
-
-```{r}
-idx <- seq(1, length(overkill_time_seq), by = 256)
-graph.plotter.3d(overkill_graph, overkill_U_true[,idx], projected_U_piecewise[,idx], overkill_time_seq[idx], overkill_time_step)
+print(m_values)
 ```
 
 
 
 
-```{r, fig.align='center', fig.dim= c(10,10), fig.cap = captioner("Caption")}
+
+
+
+```{r, fig.align='center', fig.dim= c(18,18), fig.cap = captioner("Caption")}
 errors <- errors_projected
 print(errors)
 df <- melt(errors)
-colnames(df) <- c("h", "time_step", "Value")
+colnames(df) <- c("h", "alpha", "Value")
 
-df$h <- factor(df$h, levels = unique(df$h), labels = hs)
-df$time_step <- factor(df$time_step, levels = unique(df$time_step), labels = time_steps)
+df$h <- factor(df$h, levels = unique(df$h), labels = h_vector)
+df$alpha <- factor(df$alpha, levels = unique(df$alpha), labels = alpha_vector)
 
-p <- ggplot(df, aes(x = time_step, y = h, fill = Value, text = paste("Value:", Value))) +
+p <- ggplot(df, aes(x = alpha, y = h, fill = Value, text = paste("Value:", Value))) +
   geom_tile(color = "black") +  # Add borders
   geom_text(aes(label = round(Value, 8)), size = 3) +  # Add value labels
   scale_fill_gradient(low = "white", high = "red") +
@@ -622,22 +651,43 @@ ggplotly(p, tooltip = "text")
 ```
 
 
-```{r, fig.align='center', fig.dim= c(10,10), fig.cap = captioner("Caption")}
-errors <- errors_sliced
-print(errors)
-df <- melt(errors)
-colnames(df) <- c("h", "time_step", "Value")
+```{r}
+computed_rates <- numeric(length(alpha_vector))
 
-df$h <- factor(df$h, levels = unique(df$h), labels = hs)
-df$time_step <- factor(df$time_step, levels = unique(df$time_step), labels = time_steps)
-
-p <- ggplot(df, aes(x = time_step, y = h, fill = Value, text = paste("Value:", Value))) +
-  geom_tile(color = "black") +  # Add borders
-  geom_text(aes(label = round(Value, 8)), size = 3) +  # Add value labels
-  scale_fill_gradient(low = "white", high = "red") +
-  coord_fixed() +
-  theme_minimal()
-
-ggplotly(p, tooltip = "text")
-
+for (u in 1:length(alpha_vector)) {
+  computed_rates[u] <- coef(lm(log(errors_projected[,u]) ~ log(h_vector)))[2]
+}
 ```
+
+
+```{r}
+guiding_lines <- compute_guiding_lines(h_vector, alpha_vector, errors_projected, theoretical_rate = alpha_vector)
+# Generate default ggplot2 colors
+default_colors <- scales::hue_pal()(ncol(guiding_lines))
+
+# Create the plot_lines list with different colors for each line
+plot_lines <- lapply(1:ncol(guiding_lines), function(i) {
+  geom_line(data = data.frame(x = h_vector, y = guiding_lines[, i]),
+            aes(x = x, y = y), color = default_colors[i], linetype = "dashed", show.legend = FALSE)
+})
+
+df <- as.data.frame(cbind(h_vector, errors_projected))
+colnames(df) <- c("h_vector", alpha_vector)
+df_melted <- melt(df, id.vars = "h_vector", variable.name = "column", value.name = "value")
+df_melted1 <- df_melted
+
+theoretical.rates.plot <- ggplot() +
+  geom_line(data = df_melted, aes(x = h_vector, y = value, color = column)) +
+  geom_point(data = df_melted, aes(x = h_vector, y = value, color = column)) +
+  plot_lines +
+  labs(title = "Interval graph",
+    x = "h",
+       y = "Covariance Error",
+       color = expression(alpha)) +
+  scale_x_log10(breaks = h_vector, labels = round(h_vector,5)) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(text = element_text(family = "Palatino"))
+ggplotly(theoretical.rates.plot)
+```
+
