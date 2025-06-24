@@ -550,10 +550,8 @@ OMEGA = pi
 THETA = pi
 
 # Time step and mesh size
-POWERS <- seq(14, 9, by = -1)
-
-time_steps <- 0.1 * 2^-POWERS
-h_vector <- time_steps^(1/2)
+POWERS <- seq(5, 4.5, by = -0.25)
+tau_vector <- 0.1 * 2^-POWERS
 
 # Overkill parameters
 overkill_time_step <- 0.1 * 2^-14
@@ -570,7 +568,7 @@ overkill_weights <- overkill_graph$mesh$weights
 m_values <- c()
 alpha_vector <- c(0.5, 1, 1.5, 2)
 # Create a matrix to store the errors
-errors_projected <- matrix(NA, nrow = length(h_vector), ncol = length(alpha_vector))
+errors_projected <- matrix(NA, nrow = length(tau_vector), ncol = length(alpha_vector))
 for (j in 1:length(alpha_vector)) {
   alpha <- alpha_vector[j] # from 0.5 to 2
   beta <- alpha / 2
@@ -586,9 +584,9 @@ for (j in 1:length(alpha_vector)) {
           1:length(overkill_time_seq), 
           function(i, j) (coeff_U_0[i] + coeff_FF[i] * G_sin(t = overkill_time_seq[j], A = AAA, lambda_j_alpha_half = EIGENVAL_ALPHA[i], omega = OMEGA)) * exp(-EIGENVAL_ALPHA[i] * overkill_time_seq[j]))
   
-  for (i in 1:length(h_vector)) {
-    h <- h_vector[i]
-    time_step <- h^alpha
+  for (i in 1:length(tau_vector)) {
+    time_step <- tau_vector[i]
+    h <- time_step^(1/alpha)
     m <- min(4, ceiling(25 * (log(h))^2 / (16 * pi^2 * (1 - alpha / 2))))
     m_values <- c(m_values, m)
     graph <- gets.graph.tadpole(h = h)
@@ -634,12 +632,12 @@ print(m_values)
 errors <- errors_projected
 print(errors)
 df <- melt(errors)
-colnames(df) <- c("h", "alpha", "Value")
+colnames(df) <- c("tau", "alpha", "Value")
 
-df$h <- factor(df$h, levels = unique(df$h), labels = h_vector)
+df$tau <- factor(df$tau, levels = unique(df$tau), labels = tau_vector)
 df$alpha <- factor(df$alpha, levels = unique(df$alpha), labels = alpha_vector)
 
-p <- ggplot(df, aes(x = alpha, y = h, fill = Value, text = paste("Value:", Value))) +
+p <- ggplot(df, aes(x = alpha, y = tau, fill = Value, text = paste("Value:", Value))) +
   geom_tile(color = "black") +  # Add borders
   geom_text(aes(label = round(Value, 8)), size = 3) +  # Add value labels
   scale_fill_gradient(low = "white", high = "red") +
@@ -655,13 +653,13 @@ ggplotly(p, tooltip = "text")
 ```{r}
 computed_rates <- numeric(length(alpha_vector))
 for (u in 1:length(alpha_vector)) {
-  computed_rates[u] <- coef(lm(log(errors_projected[, u]) ~ log(h_vector)))[2]
+  computed_rates[u] <- coef(lm(log(errors_projected[, u]) ~ log(tau_vector)))[2]
 }
-guiding_lines <- compute_guiding_lines(h_vector, alpha_vector, errors_projected, theoretical_rate = alpha_vector)
+guiding_lines <- compute_guiding_lines(tau_vector, alpha_vector, errors_projected, theoretical_rate = rep(1, length(alpha_vector)))
 default_colors <- scales::hue_pal()(length(alpha_vector))
 plot_lines <- lapply(1:ncol(guiding_lines), function(i) {
   geom_line(
-    data = data.frame(x = h_vector, y = guiding_lines[, i]),
+    data = data.frame(x = tau_vector, y = guiding_lines[, i]),
     aes(x = x, y = y),
     color = default_colors[i],
     linetype = "dashed",
@@ -669,23 +667,23 @@ plot_lines <- lapply(1:ncol(guiding_lines), function(i) {
   )
 })
 
-df <- as.data.frame(cbind(h_vector, errors_projected))
-colnames(df) <- c("h_vector", alpha_vector)
-df_melted <- melt(df, id.vars = "h_vector", variable.name = "column", value.name = "value")
+df <- as.data.frame(cbind(tau_vector, errors_projected))
+colnames(df) <- c("tau_vector", alpha_vector)
+df_melted <- melt(df, id.vars = "tau_vector", variable.name = "column", value.name = "value")
 alpha_formatted <- formatC(alpha_vector, format = "f", digits = 1)
 custom_labels <- paste0(alpha_formatted, " (", truncate_to_two(computed_rates), ")")
 df_melted$column <- factor(df_melted$column, levels = alpha_vector, labels = custom_labels)
 
 p <- ggplot() +
-  geom_line(data = df_melted, aes(x = h_vector, y = value, color = column)) +
-  geom_point(data = df_melted, aes(x = h_vector, y = value, color = column)) +
+  geom_line(data = df_melted, aes(x = tau_vector, y = value, color = column)) +
+  geom_point(data = df_melted, aes(x = tau_vector, y = value, color = column)) +
   plot_lines +
   labs(
-    x = "h",
+    x = expression(tau),
     y = "Error",
     color = "α (observed)"
   ) +
-  scale_x_log10(breaks = h_vector, labels = round(h_vector, 3)) +
+  scale_x_log10(breaks = tau_vector, labels = round(tau_vector, 4)) +
   scale_y_log10() +
   theme_minimal() +
   theme(text = element_text(family = "Palatino"))
@@ -695,6 +693,6 @@ p
 
 
 ```{r}
-ggsave(here::here("data_files/conv_rates_h.png"), width = 6, height = 4, plot = p, dpi = 300)
+ggsave(here::here("data_files/conv_rates_tau.png"), width = 6, height = 4, plot = p, dpi = 300)
 ```
 
