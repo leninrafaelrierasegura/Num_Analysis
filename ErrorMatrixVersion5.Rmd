@@ -448,43 +448,13 @@ construct_piecewise_projection <- function(projected_U_approx, time_seq, overkil
   
   return(projected_U_piecewise)
 }
-loglog_line_equation <- function(x1, y1, slope) {
-  b <- log10(y1 / (x1 ^ slope))
-  
-  function(x) {
-    (x ^ slope) * (10 ^ b)
-  }
-}
-compute_guiding_lines <- function(sqrt_m_vector, alpha_vector, errors_projected, theoretical_rate) {
-  guiding_lines <- matrix(NA, nrow = length(sqrt_m_vector), ncol = length(alpha_vector))
-  
-  for (j in seq_along(alpha_vector)) {
-    guiding_lines_aux <- matrix(NA, nrow = length(sqrt_m_vector), ncol = length(sqrt_m_vector))
-    
-    for (k in seq_along(sqrt_m_vector)) {
-      point_x1 <- sqrt_m_vector[k]
-      point_y1 <- errors_projected[k, j]
-      slope <- theoretical_rate[j]
-      
-      line <- loglog_line_equation(x1 = point_x1, y1 = point_y1, slope = slope)
-      guiding_lines_aux[, k] <- line(sqrt_m_vector)
-    }
-    
-    guiding_lines[, j] <- rowMeans(guiding_lines_aux)
-  }
-  
-  return(guiding_lines)
-}
 exp_line_equation <- function(x1, y1, rate) {
-  # Solves for log10(C) from one point (x1, y1)
-  log10_C <- log10(y1) + rate * x1
+  lnC <- log(y1) - rate * x1
   
   function(x) {
-    10^(log10_C + rate * x)
+    exp(lnC + rate * x)
   }
 }
-
-
 compute_guiding_lines_exp <- function(sqrt_m_vector, rate_vector, errors_projected) {
   guiding_lines <- matrix(NA, nrow = length(sqrt_m_vector), ncol = length(rate_vector))
   
@@ -494,7 +464,7 @@ compute_guiding_lines_exp <- function(sqrt_m_vector, rate_vector, errors_project
     for (k in seq_along(sqrt_m_vector)) {
       x1 <- sqrt_m_vector[k]
       y1 <- errors_projected[k, j]
-      rate <- rate_vector[j]  # corresponds to A in exp(-A sqrt(m))
+      rate <- rate_vector[j]
       
       line <- exp_line_equation(x1, y1, rate)
       guiding_lines_aux[, k] <- line(sqrt_m_vector)
@@ -505,7 +475,6 @@ compute_guiding_lines_exp <- function(sqrt_m_vector, rate_vector, errors_project
   
   return(guiding_lines)
 }
-
 ```
 
 
@@ -614,8 +583,8 @@ for (j in 1:length(alpha_vector)) {
   
   for (i in 1:length(m_vector)) {
     m <- m_vector[i]
-    h <- exp(- (4 * pi / 5) * sqrt((1 - alpha / 2) * m))/10
-    time_step <- (h^alpha)/10
+    h <- exp(- (4 * pi / 5) * sqrt((1 - alpha / 2) * m))/50
+    time_step <- (h^alpha)/50
     graph <- gets.graph.tadpole(h = h)
     graph$compute_fem()
     G <- graph$mesh$G
@@ -646,45 +615,20 @@ for (j in 1:length(alpha_vector)) {
     errors_projected[i,j] <- sqrt(as.double(t(overkill_weights) %*% (overkill_U_true - projected_U_piecewise)^2 %*% rep(overkill_time_step, length(overkill_time_seq))))
   }
 }
-```
-
-
-
-
-
-
-
-```{r, fig.align='center', fig.dim= c(18,18), fig.cap = captioner("Caption")}
-errors <- errors_projected
-print(errors)
-df <- melt(errors)
-colnames(df) <- c("m", "alpha", "Value")
-
-df$m <- factor(df$m, levels = unique(df$m), labels = m_vector)
-df$alpha <- factor(df$alpha, levels = unique(df$alpha), labels = alpha_vector)
-
-p <- ggplot(df, aes(x = alpha, y = m, fill = Value, text = paste("Value:", Value))) +
-  geom_tile(color = "black") +  # Add borders
-  geom_text(aes(label = round(Value, 8)), size = 3) +  # Add value labels
-  scale_fill_gradient(low = "white", high = "red") +
-  coord_fixed() +
-  theme_minimal()
-
-ggplotly(p, tooltip = "text")
+save(errors_projected, file = here::here("data_files/errors_projected_m.RData"))
 
 ```
 
 
-
-```{r}
-computed_rates <- numeric(length(alpha_vector))
+```{r, fig.align='center', fig.dim= c(4,5), fig.cap = captioner("Caption")}
+observed_rates <- numeric(length(alpha_vector))
 for (u in 1:length(alpha_vector)) {
-  computed_rates[u] <- coef(lm(log(errors_projected[, u]) ~ sqrt(m_vector)))[2]
+  observed_rates[u] <- coef(lm(log(errors_projected[, u]) ~ sqrt(m_vector)))[2]
 }
 
-true_rates <- - (4 * pi * alpha_vector / 5) * sqrt((1 - alpha_vector / 2))
+theoretical_rates <- - (4 * pi * alpha_vector / 5) * sqrt((1 - alpha_vector / 2))
 
-guiding_lines <- compute_guiding_lines_exp(sqrt(m_vector), true_rates, errors_projected)
+guiding_lines <- compute_guiding_lines_exp(sqrt(m_vector), theoretical_rates, errors_projected)
 default_colors <- scales::hue_pal()(length(alpha_vector))
 plot_lines <- lapply(1:ncol(guiding_lines), function(i) {
   geom_line(
@@ -700,7 +644,12 @@ df <- as.data.frame(cbind(sqrt(m_vector), errors_projected))
 colnames(df) <- c("m_vector", alpha_vector)
 df_melted <- melt(df, id.vars = "m_vector", variable.name = "column", value.name = "value")
 alpha_formatted <- formatC(alpha_vector, format = "f", digits = 2)
-custom_labels <- paste0(alpha_formatted, " (", truncate_to_two(true_rates), truncate_to_two(computed_rates), ")")
+custom_labels <- paste0(alpha_formatted, 
+                        " | ", 
+                        formatC(theoretical_rates, format = "f", digits = 4), 
+                        " | ", 
+                        formatC(observed_rates, format = "f", digits = 4))
+
 df_melted$column <- factor(df_melted$column, levels = alpha_vector, labels = custom_labels)
 
 p <- ggplot() +
@@ -708,20 +657,35 @@ p <- ggplot() +
   geom_point(data = df_melted, aes(x = m_vector, y = value, color = column)) +
   plot_lines +
   labs(
-    x = expression(sqrt(m)),
-    y = "Error",
-    color = "α (observed)"
+    title = expression("Convergence in " * italic(m)),
+    x = expression(italic(m)~(sqrt~scale)),
+    y = expression(Error~(log[e]~scale)),
+    color = "          α  | theo  | obs"
   ) +
-  scale_x_continuous(breaks = sqrt(m_vector), labels = round(sqrt(m_vector), 4)) +
-  scale_y_log10(trans = "log") +
+  scale_x_continuous(breaks = sqrt(m_vector), labels = round(m_vector, 4)) +
+  scale_y_continuous(
+  trans = "log",
+  labels = function(x) formatC(x, format = "f", digits = 4)) +
   theme_minimal() +
-  theme(text = element_text(family = "Palatino"))
-
+  theme(text = element_text(family = "Palatino"),
+        legend.position = "bottom",
+        legend.direction = "vertical",
+        plot.margin = margin(0, 0, 0, 0),
+        plot.title = element_text(hjust = 0.5, size = 18, face = "bold"))
 p
 ```
 
 
 ```{r}
-ggsave(here::here("data_files/conv_rates_tau.png"), width = 6, height = 4, plot = p, dpi = 300)
+ggsave(here::here("data_files/conv_rates_m.png"), width = 4, height = 5, plot = p, dpi = 300)
 ```
 
+```{r}
+library(slackr)
+token = "xoxb-8768832357510-8768852406294-t9F8Dyjup5VIcHJd1Y3c4dZL"
+slackr_setup(token = token)
+slackr_msg(
+  text = "Convergence in m completed",
+  channel = "#ranks"
+)
+```

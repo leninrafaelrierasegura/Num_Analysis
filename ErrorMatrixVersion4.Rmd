@@ -550,12 +550,12 @@ OMEGA = pi
 THETA = pi
 
 # Time step and mesh size
-POWERS <- seq(5, 4.5, by = -0.25)
+POWERS <- seq(8.5, 6.5, by = -0.5)
 tau_vector <- 0.1 * 2^-POWERS
 
 # Overkill parameters
-overkill_time_step <- 0.1 * 2^-14
-overkill_h <- (0.1 * 2^-14)^(1/2)
+overkill_time_step <- 0.1 * 2^-16
+overkill_h <- (0.1 * 2^-16)^(1/2)
 
 # Finest time and space mesh
 overkill_time_seq <- seq(0, T_final, length.out = ((T_final - 0) / overkill_time_step + 1))
@@ -566,7 +566,7 @@ overkill_graph$compute_fem() # This is needed to compute the weights
 overkill_weights <- overkill_graph$mesh$weights
 
 m_values <- c()
-alpha_vector <- c(0.5, 1, 1.5, 2)
+alpha_vector <- seq(0.75, 1.75, by = 0.25)
 # Create a matrix to store the errors
 errors_projected <- matrix(NA, nrow = length(tau_vector), ncol = length(alpha_vector))
 for (j in 1:length(alpha_vector)) {
@@ -620,42 +620,22 @@ for (j in 1:length(alpha_vector)) {
   }
 }
 print(m_values)
-```
-
-
-
-
-
-
-
-```{r, fig.align='center', fig.dim= c(18,18), fig.cap = captioner("Caption")}
-errors <- errors_projected
-print(errors)
-df <- melt(errors)
-colnames(df) <- c("tau", "alpha", "Value")
-
-df$tau <- factor(df$tau, levels = unique(df$tau), labels = tau_vector)
-df$alpha <- factor(df$alpha, levels = unique(df$alpha), labels = alpha_vector)
-
-p <- ggplot(df, aes(x = alpha, y = tau, fill = Value, text = paste("Value:", Value))) +
-  geom_tile(color = "black") +  # Add borders
-  geom_text(aes(label = round(Value, 8)), size = 3) +  # Add value labels
-  scale_fill_gradient(low = "white", high = "red") +
-  coord_fixed() +
-  theme_minimal()
-
-ggplotly(p, tooltip = "text")
+save(errors_projected, file = here::here("data_files/errors_projected_tau.RData"))
 
 ```
 
 
 
-```{r}
-computed_rates <- numeric(length(alpha_vector))
+
+```{r, fig.align='center', fig.dim= c(4,5), fig.cap = captioner("Caption")}
+observed_rates <- numeric(length(alpha_vector))
 for (u in 1:length(alpha_vector)) {
-  computed_rates[u] <- coef(lm(log(errors_projected[, u]) ~ log(tau_vector)))[2]
+  observed_rates[u] <- coef(lm(log10(errors_projected[, u]) ~ log10(tau_vector)))[2]
 }
-guiding_lines <- compute_guiding_lines(tau_vector, alpha_vector, errors_projected, theoretical_rate = rep(1, length(alpha_vector)))
+
+theoretical_rates <- rep(1, length(alpha_vector))
+
+guiding_lines <- compute_guiding_lines(tau_vector, alpha_vector, errors_projected, theoretical_rate = theoretical_rates)
 default_colors <- scales::hue_pal()(length(alpha_vector))
 plot_lines <- lapply(1:ncol(guiding_lines), function(i) {
   geom_line(
@@ -670,8 +650,14 @@ plot_lines <- lapply(1:ncol(guiding_lines), function(i) {
 df <- as.data.frame(cbind(tau_vector, errors_projected))
 colnames(df) <- c("tau_vector", alpha_vector)
 df_melted <- melt(df, id.vars = "tau_vector", variable.name = "column", value.name = "value")
-alpha_formatted <- formatC(alpha_vector, format = "f", digits = 1)
-custom_labels <- paste0(alpha_formatted, " (", truncate_to_two(computed_rates), ")")
+alpha_formatted <- formatC(alpha_vector, format = "f", digits = 2)
+
+custom_labels <- paste0(alpha_formatted, 
+                        " | ", 
+                        formatC(theoretical_rates, format = "f", digits = 4), 
+                        " | ", 
+                        formatC(observed_rates, format = "f", digits = 4))
+
 df_melted$column <- factor(df_melted$column, levels = alpha_vector, labels = custom_labels)
 
 p <- ggplot() +
@@ -679,20 +665,35 @@ p <- ggplot() +
   geom_point(data = df_melted, aes(x = tau_vector, y = value, color = column)) +
   plot_lines +
   labs(
-    x = expression(tau),
-    y = "Error",
-    color = "α (observed)"
+    title = expression("Convergence in " * italic(tau)),
+    x = expression(italic(tau)~(log[10]~scale)),
+    y = expression(Error~(log[10]~scale)),
+    color = "          α  | theo  | obs"
   ) +
   scale_x_log10(breaks = tau_vector, labels = round(tau_vector, 4)) +
-  scale_y_log10() +
+  scale_y_log10(labels = function(x) formatC(x, format = "f", digits = 4)) +
   theme_minimal() +
-  theme(text = element_text(family = "Palatino"))
+  theme(text = element_text(family = "Palatino"),
+        legend.position = "bottom",
+        legend.direction = "vertical",
+        plot.margin = margin(0, 0, 0, 0),
+        plot.title = element_text(hjust = 0.5, size = 18, face = "bold"))
 
 p
 ```
 
 
 ```{r}
-ggsave(here::here("data_files/conv_rates_tau.png"), width = 6, height = 4, plot = p, dpi = 300)
+ggsave(here::here("data_files/conv_rates_tau.png"), width = 4, height = 5, plot = p, dpi = 300)
 ```
 
+
+```{r}
+library(slackr)
+token = "xoxb-8768832357510-8768852406294-t9F8Dyjup5VIcHJd1Y3c4dZL"
+slackr_setup(token = token)
+slackr_msg(
+  text = "Convergence in tau completed",
+  channel = "#ranks"
+)
+```

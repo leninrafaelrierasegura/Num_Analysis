@@ -1182,6 +1182,27 @@
       ],
       "Hash": "b99bc68a928d7d9aea4aad10d970edf1"
     },
+    "slackr": {
+      "Package": "slackr",
+      "Version": "3.3.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "cachem",
+        "dplyr",
+        "grDevices",
+        "httr",
+        "jsonlite",
+        "magrittr",
+        "memoise",
+        "rlang",
+        "tibble",
+        "utils",
+        "withr"
+      ],
+      "Hash": "652c91f452bc8a46d2ab155cd08a41fe"
+    },
     "sp": {
       "Package": "sp",
       "Version": "2.2-0",
