@@ -375,9 +375,13 @@ plotting.order <- function(v, graph){
   atone <- which(head_edge_number == edge_out)
   
   new_v <- c(head_v[atzero], tail_v[which(tail_edge_number == edge1)], head_v[atone])
-  
+  i=0
   for (EDGE in 2:graph$nE) {
     atzerofor <- which(head_edge_number == EDGE)
+    if (length(atzerofor) == 0) {
+      edge_in <- which(E[,1] %in% E[EDGE, 1])[1]
+      atzerofor <- which(head_edge_number == edge_in)
+    }
     edge_outfor <- which(E[,1] %in% E[EDGE, 2])[1]
     atonefor <- which(head_edge_number == edge_outfor)
     new_v <- c(new_v, NA, head_v[atzerofor], tail_v[which(tail_edge_number == EDGE)], head_v[atonefor])
@@ -638,7 +642,6 @@ graph.plotter.3d.single <- function(graph, U_true, time_seq) {
   # Normalize time_seq
   time_normalized <- (time_seq - min(time_seq)) / (max(time_seq) - min(time_seq))
   greens <- colorRampPalette(c(viridis_colors[1], viridis_colors[50],  viridis_colors[100]))(n_times)
-  greens <- colorRampPalette(c("white", "white"))(n_times)
   # Accurate colorscales
   colorscale_greens <- Map(function(t, col) list(t, col), time_normalized, greens)
 
@@ -771,9 +774,9 @@ gets.hexagonal.grid.graph <- function(h = 0.05){
 
 
 ```{r}
-T_final <- 0.1
-time_step <- 0.1 #0.1 * 2^-10 # 0.01
-h <- 0.25 #sqrt(time_step) # 0.01
+T_final <- 1
+time_step <- 0.01 #0.1 * 2^-10 # 0.01
+h <- 0.1 #sqrt(time_step) # 0.01
 kappa <- 1#15
 alpha <- 0.5 # from 0.5 to 2
 m = 1
