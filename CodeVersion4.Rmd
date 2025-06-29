@@ -704,7 +704,7 @@ gets.star.graph <- function(h = 0.05, n = 3, length = 1) {
 
 
 ```{r}
-T_final <- 2
+T_final <- 0.2
 time_step <- 0.01 #0.1 * 2^-10 # 0.01
 h <- 0.01 #sqrt(time_step) # 0.01
 kappa <- 1#15
@@ -727,8 +727,8 @@ graph_coord_loc <- graph$mesh$VtE
 
 
 # Compute the initial condition
-U_0 <- -cos(1 * pi * graph_coord_loc[,2])
-FF <- outer(cos(2 * pi * graph_coord_loc[, 2]), sin(2 * pi * time_seq))
+U_0 <- -3*cos(2 * pi * graph_coord_loc[,2])/(8*pi^2)
+FF <- outer(cos(2 * pi * graph_coord_loc[, 2]), sin(2 * pi * time_seq)*0+1)
 
 overkill_graph <- gets.star.graph(h = 0.0001, n = 3, length = 1)
 overkill_graph$compute_fem()

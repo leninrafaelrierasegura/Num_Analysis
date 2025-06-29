@@ -654,7 +654,7 @@ graph.plotter.3d.single <- function(graph, U_true, time_seq) {
   p <- p %>%
     add_trace(x = x, y = y, z = rep(0, length(x)),
               type = "scatter3d", mode = "lines",
-              line = list(color = "black", width = 3),
+              line = list(color = "black", width = 4),
               name = "Graph", showlegend = FALSE)
   
   # Add the 3D lines with fading green color
@@ -668,7 +668,7 @@ graph.plotter.3d.single <- function(graph, U_true, time_seq) {
       x = x,
       y = y,
       z = z,
-      line = list(color = greens[i], width = 3),
+      line = list(color = greens[i], width = 4),
       showlegend = FALSE,
       scene = "scene"
     )
@@ -683,7 +683,7 @@ graph.plotter.3d.single <- function(graph, U_true, time_seq) {
     colorscale = colorscale_greens,
     colorbar = list(
     title = list(font = list(size = 12, color = "black"), text = "Time.", side = "top"),
-    len = 0.9,         # height (0 to 1)
+    len = 0.7,         # height (0 to 1)
     thickness = 15,     # width in pixels
     x = 1.02,           # shift it slightly right of the plot
     xanchor = "left",
@@ -694,7 +694,11 @@ graph.plotter.3d.single <- function(graph, U_true, time_seq) {
     hoverinfo = "skip",
     opacity = 0
   )
-  
+  p <- p %>%
+    add_trace(x = x, y = y, z = rep(0, length(x)),
+              type = "scatter3d", mode = "lines",
+              line = list(color = "black", width = 4),
+              name = "Graph", showlegend = FALSE)
   p <- layout(p,
               scene = global.scene.setter(x_range, y_range, z_range),
               xaxis = list(visible = FALSE),
@@ -774,10 +778,10 @@ gets.hexagonal.grid.graph <- function(h = 0.05){
 
 
 ```{r}
-T_final <- 1
+T_final <- 0.5
 time_step <- 0.01 #0.1 * 2^-10 # 0.01
-h <- 0.1 #sqrt(time_step) # 0.01
-kappa <- 1#15
+h <- 0.01 #sqrt(time_step) # 0.01
+kappa <- 15#15
 alpha <- 0.5 # from 0.5 to 2
 m = 1
 beta <- alpha/2
@@ -796,7 +800,7 @@ L <- kappa^2*C + G
 graph_coord_loc <- graph$mesh$VtE
 
 # Compute the initial condition
-U_0 <- cos(2 * pi * graph_coord_loc[,2])
+U_0 <- -cos(2 * pi * graph_coord_loc[,2])/(4*pi^2)
 ```
 
 
