@@ -236,3 +236,11 @@ remote: error: GH001: Large files detected. You may want to try Git Large File S
 To github.com:leninrafaelrierasegura/Num_Analysis.git
  ! [remote rejected] main -> main (pre-receive hook declined)
 error: failed to push some refs to 'github.com:leninrafaelrierasegura/Num_Analysis.git'
+remote: error: Trace: 08e21a78b2626a0bb67a7397fd5d9ad3db6cd2b7b8d7dae4b0c454a993c2ca7f        
+remote: error: See https://gh.io/lfs for more information.        
+remote: error: File _site/CodeVersion6.html is 119.37 MB; this exceeds GitHub's file size limit of 100.00 MB        
+remote: error: File _site/CopyOfbasisf_plot.html is 322.58 MB; this exceeds GitHub's file size limit of 100.00 MB        
+remote: error: GH001: Large files detected. You may want to try Git Large File Storage - https://git-lfs.github.com.        
+To github.com:leninrafaelrierasegura/Num_Analysis.git
+ ! [remote rejected] main -> main (pre-receive hook declined)
+error: failed to push some refs to 'github.com:leninrafaelrierasegura/Num_Analysis.git'
