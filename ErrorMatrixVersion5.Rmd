@@ -680,12 +680,4 @@ p
 ggsave(here::here("data_files/conv_rates_m.png"), width = 4, height = 5, plot = p, dpi = 300)
 ```
 
-```{r}
-library(slackr)
-token = "xoxb-8768832357510-8768852406294-t9F8Dyjup5VIcHJd1Y3c4dZL"
-slackr_setup(token = token)
-slackr_msg(
-  text = "Convergence in m completed",
-  channel = "#ranks"
-)
-```
+

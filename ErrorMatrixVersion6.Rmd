@@ -682,13 +682,4 @@ ggsave(here::here("data_files/conv_rates_h_star.png"), width = 4, height = 5, pl
 ```
 
 
-```{r}
-library(slackr)
-token = "xoxb-8768832357510-8768852406294-t9F8Dyjup5VIcHJd1Y3c4dZL"
-slackr_setup(token = token)
-slackr_msg(
-  text = "Convergence in h completed",
-  channel = "#ranks"
-)
-```
 
