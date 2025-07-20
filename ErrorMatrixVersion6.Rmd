@@ -687,7 +687,7 @@ library(slackr)
 source(here::here("keys.R"))
 slackr_setup(token = token)
 slackr_msg(
-  text = "Convergence in m completed",
+  text = "Convergence innninin m completed",
   channel = "#ranks"
 )
 ```
