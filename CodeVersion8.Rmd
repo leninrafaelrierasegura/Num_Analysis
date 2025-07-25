@@ -664,12 +664,12 @@ graph.plotter.3d.single <- function(graph, U_true, time_seq) {
   return(p)
 }
 
-solve_fractional_evolution <- function(my_op_frac, time_step, time_seq, VAL0, PC1) {
+solve_fractional_evolution <- function(my_op_frac, time_step, time_seq, val_at_0, RHSF) {
   CC <- my_op_frac$C
   SOL <- matrix(NA, nrow = nrow(CC), ncol = length(time_seq))
-  SOL[, 1] <- VAL0
+  SOL[, 1] <- val_at_0
   for (k in 1:(length(time_seq) - 1)) {
-    rhs <- CC %*% SOL[, k] + time_step * PC1[, k + 1]
+    rhs <- CC %*% SOL[, k] + time_step * RHSF[, k + 1]
     SOL[, k + 1] <- as.matrix(my.solver.frac(my_op_frac, rhs))
   }
   return(SOL)
@@ -762,10 +762,10 @@ VdVd <- UdUd[, rev(seq_len(ncol(UdUd)))]
 
 F_plus_Z_eval <- outer(overkill_elliptic_u, psi_prime) + outer(overkill_elliptic_f, psi) 
 FF_plus_ZZ <- R %*% F_plus_Z_eval
-U_eval <- solve_fractional_evolution(my_op_frac, time_step, time_seq, VAL0 = u_0, FF_plus_ZZ)
+U_eval <- solve_fractional_evolution(my_op_frac, time_step, time_seq, val_at_0 = u_0, FF_plus_ZZ)
 UU <- R %*% A_proj %*% U_eval
 VV <- UU[, rev(seq_len(ncol(UU)))]
-Q_eval <- solve_fractional_evolution(my_op_frac, time_step, time_seq, VAL0 = u_0*0, VV - VdVd)
+Q_eval <- solve_fractional_evolution(my_op_frac, time_step, time_seq, val_at_0 = u_0*0, VV - VdVd)
 P_eval <- Q_eval[, rev(seq_len(ncol(Q_eval)))]
 Z_eval <- pmax(A_eval, pmin(B_eval, - P_eval / mu))
 
@@ -809,14 +809,14 @@ for (iter in 1:max_iter) {
             outer(overkill_elliptic_f, psi) - A_proj %*% z_bar
   FF <- R %*% F_eval
   ZZ <- R %*% A_proj %*% Z_eval
-  U_eval <- solve_fractional_evolution(my_op_frac, time_step, time_seq, VAL0 = u_0, FF + ZZ)
+  U_eval <- solve_fractional_evolution(my_op_frac, time_step, time_seq, val_at_0 = u_0, FF + ZZ)
 
   # 3. Prepare for backward problem (reverse U for V)
   UU <- R %*% A_proj %*% U_eval
   VV <- UU[, rev(seq_len(ncol(UU)))]
 
   # 4. Solve backward problem (P)
-  Q_eval <- solve_fractional_evolution(my_op_frac, time_step, time_seq, VAL0 = u_0 * 0, VV - VdVd)
+  Q_eval <- solve_fractional_evolution(my_op_frac, time_step, time_seq, val_at_0 = u_0 * 0, VV - VdVd)
   P_eval <- Q_eval[, rev(seq_len(ncol(Q_eval)))]
 
   # 5. Compute convergence metrics (L2 in space and time with weights)

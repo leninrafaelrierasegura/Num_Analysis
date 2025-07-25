@@ -328,3 +328,31 @@ remote:
 To github.com:leninrafaelrierasegura/Num_Analysis.git
  ! [remote rejected] main -> main (push declined due to repository rule violations)
 error: failed to push some refs to 'github.com:leninrafaelrierasegura/Num_Analysis.git'
+remote: error: GH013: Repository rule violations found for refs/heads/main.        
+remote: 
+remote: - GITHUB PUSH PROTECTION        
+remote:   —————————————————————————————————————————        
+remote:     Resolve the following violations before pushing again        
+remote: 
+remote:     - Push cannot contain secrets        
+remote: 
+remote:             
+remote:      (?) Learn how to resolve a blocked push        
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push        
+remote:             
+remote:             
+remote:       —— Slack API Token ———————————————————————————————————        
+remote:        locations:        
+remote:          - commit: 7be86e341835fdb53e568c6142fdd5f39326021e        
+remote:            path: .Rhistory:492        
+remote:          - commit: 7be86e341835fdb53e568c6142fdd5f39326021e        
+remote:            path: .Rhistory:500        
+remote:             
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.        
+remote:        https://github.com/leninrafaelrierasegura/Num_Analysis/security/secret-scanning/unblock-secret/30FnvNp376MyC6ZPQaE4Y0yG3z5        
+remote:             
+remote: 
+remote: 
+To github.com:leninrafaelrierasegura/Num_Analysis.git
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'github.com:leninrafaelrierasegura/Num_Analysis.git'
