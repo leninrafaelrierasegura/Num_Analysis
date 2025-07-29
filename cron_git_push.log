@@ -412,3 +412,5 @@ remote:
 To github.com:leninrafaelrierasegura/Num_Analysis.git
  ! [remote rejected] main -> main (push declined due to repository rule violations)
 error: failed to push some refs to 'github.com:leninrafaelrierasegura/Num_Analysis.git'
+To github.com:leninrafaelrierasegura/Num_Analysis.git
+   c9770bf..fc16aa0  main -> main
