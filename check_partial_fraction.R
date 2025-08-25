@@ -81,6 +81,28 @@ lines(x, g_x(x), col = "red")
 lines(x, f_x(x)-g_x(x)+1, col = "black")  # Add x-axis
 
 
+# g_x <- function(x){
+#   res$r[1]/(x - res$p[1]) + res$r[2]/(x - res$p[2]) + res$r[3]/(x - res$p[3]) +
+#   res$r[4]/(x - res$p[4]) + res$r[5]/(x - res$p[5]) + res$k
+# }
+
+# f_x <- function(x) {
+#   up <- x^5*pol$b[1] + x^4*pol$b[2] + x^3*pol$b[3] + x^2*pol$b[4] + x*pol$b[5] + pol$b[6]
+#   down <- x^5*pol$a[1] + x^4*pol$a[2] + x^3*pol$a[3] + x^2*pol$a[4] + x*pol$a[5] + pol$a[6]
+#   return(up/down)
+# }
+
+
+# G_x <- function(x){
+#   out$r[1]/(x - out$p[1]) + out$r[2]/(x - out$p[2]) + out$r[3]/(x - out$p[3]) +
+#     out$r[4]/(x - out$p[4]) + out$r[5]/(x - out$p[5]) + out$k
+# }
+# F_x <- function(x){
+#   up <- x^5*pol$b[1] + x^4*pol$b[2] + x^3*pol$b[3] + x^2*pol$b[4] + x*pol$b[5] + pol$b[6]
+#   down <- x^5*pol$a[1] + x^4*pol$a[2] + x^3*pol$a[3] + x^2*pol$a[4] + x*pol$a[5] + pol$a[6]
+#   return(up/(up + time_step * scaling * down))
+# }
+
 
 # library(gsignal)
 # 
